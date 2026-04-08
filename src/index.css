@@ -197,23 +197,34 @@ img {
 
 .hero-card {
   border-radius: 36px;
-  padding: 32px;
+  padding: 38px 46px;
   display: grid;
   grid-template-columns: 1.2fr 0.9fr;
   gap: 24px;
   align-items: center;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 42px 100px -20px rgba(18, 59, 55, 0.12);
+  backdrop-filter: blur(28px) saturate(140%);
+  animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .hero-copy h2 {
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: clamp(2.5rem, 4vw, 4.6rem);
-  line-height: 0.98;
-  max-width: 11ch;
+  font-family: inherit;
+  font-weight: 800;
+  font-size: clamp(2.5rem, 4.5vw, 4.6rem);
+  line-height: 1.05;
+  letter-spacing: -1.5px;
+  color: #12332f;
+  margin-block: 12px 24px;
 }
 
 .hero-copy h2 span {
   color: #ef7b45;
-  font-style: italic;
+  background: linear-gradient(135deg, #ef7b45, #d95318);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .hero-copy p,
@@ -301,13 +312,26 @@ img {
 .admin-side-card,
 .admin-main-card {
   border-radius: 28px;
-  padding: 24px;
+  padding: 32px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 16px 40px rgba(15, 59, 55, 0.06);
+  backdrop-filter: blur(20px) saturate(140%);
+  animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+.stat-card:nth-child(2) { animation-delay: 0.1s; }
+.stat-card:nth-child(3) { animation-delay: 0.2s; }
+.info-panel { animation-delay: 0.3s; }
+.form-panel { animation-delay: 0.4s; }
 
 .stat-card strong {
   display: block;
-  font-size: 2rem;
+  font-size: 2.2rem;
   margin-top: 12px;
+  color: #1a443e;
+  font-weight: 800;
+  letter-spacing: -1px;
 }
 
 .content-grid,
