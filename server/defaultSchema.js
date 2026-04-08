@@ -1,11 +1,11 @@
 export const defaultSchema = {
-  eventName: 'Gelaran Heritage Fest 2026',
-  tagline: 'Pendaftaran peserta event yang modern, rapi, dan tanpa Google Form.',
+  eventName: 'City Marathon 2026',
+  tagline: 'Run For The Win! Join the biggest marathon event this year.',
   description:
-    'Kelola event, kumpulkan data peserta, dan publikasikan poster acara dalam satu webapp yang mudah digunakan.',
-  location: 'Solo, Indonesia',
-  date: '24 - 26 Agustus 2026',
-  poster: '/design-reference.png',
+    'Daftarkan diri Anda untuk pengalaman lari tak terlupakan. Kumpulkan data peserta dan kelola registrasi dengan mudah.',
+  location: 'City Center Start/Finish',
+  date: '19 Oktober 2026',
+  poster: '/new_running_poster.png',
   fields: [
     {
       id: 'full-name',
