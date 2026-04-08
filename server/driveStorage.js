@@ -127,5 +127,8 @@ export async function uploadDriveFile({ fileName, mimeType, buffer }) {
     supportsAllDrives: true,
   })
 
-  return `https://drive.google.com/uc?id=${fileId}`
+  // drive.google.com/uc?id= is deprecated and causes NS_BINDING_ABORTED in browsers.
+  // Use the thumbnail API which reliably serves the image directly.
+  // sz=w1200 sets a max width of 1200px — adjust as needed.
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`
 }

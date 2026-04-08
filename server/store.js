@@ -44,8 +44,20 @@ async function writeDb(data) {
   fs.writeFileSync(dbPath, JSON.stringify(data, null, 2))
 }
 
+// Migrates deprecated drive.google.com/uc?id= poster URLs to the
+// thumbnail API format which is reliably served as an image in all browsers.
+function migratePosterUrl(schema) {
+  if (!schema?.poster) return schema
+  const match = schema.poster.match(/drive\.google\.com\/uc\?(?:.*&)?id=([^&]+)/)
+  if (match) {
+    return { ...schema, poster: `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1200` }
+  }
+  return schema
+}
+
 export async function getSchema() {
-  return (await readDb()).schema
+  const schema = (await readDb()).schema
+  return migratePosterUrl(schema)
 }
 
 export async function saveSchema(schema) {
