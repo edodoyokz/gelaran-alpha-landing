@@ -1,0 +1,53 @@
+{
+  "schema": {
+    "eventName": "Gelaran Heritage Fest 2026",
+    "tagline": "Pendaftaran peserta event yang modern, rapi, dan tanpa Google Form.",
+    "description": "Kelola event, kumpulkan data peserta, dan publikasikan poster acara dalam satu webapp yang mudah digunakan.",
+    "location": "Solo, Indonesia",
+    "date": "24 - 26 Agustus 2026",
+    "poster": "/design-reference.png",
+    "fields": [
+      {
+        "id": "full-name",
+        "label": "Nama Lengkap",
+        "type": "text",
+        "required": true,
+        "placeholder": "Masukkan nama lengkap",
+        "options": ""
+      },
+      {
+        "id": "email",
+        "label": "Email",
+        "type": "email",
+        "required": true,
+        "placeholder": "nama@email.com",
+        "options": ""
+      },
+      {
+        "id": "phone",
+        "label": "Nomor WhatsApp",
+        "type": "tel",
+        "required": true,
+        "placeholder": "08xxxxxxxxxx",
+        "options": ""
+      },
+      {
+        "id": "category",
+        "label": "Kategori Peserta",
+        "type": "select",
+        "required": true,
+        "placeholder": "",
+        "options": "Pelajar, Mahasiswa, Umum, Komunitas"
+      },
+      {
+        "id": "motivation",
+        "label": "Motivasi Mengikuti Event",
+        "type": "textarea",
+        "required": false,
+        "placeholder": "Ceritakan singkat alasan Anda",
+        "options": ""
+      }
+    ]
+  },
+  "submissions": []
+}
