@@ -332,11 +332,11 @@ img {
 
 .stat-card strong {
   display: block;
-  font-size: 2.2rem;
+  font-size: clamp(1.4rem, 2vw, 1.6rem);
   margin-top: 12px;
   color: #1a443e;
   font-weight: 800;
-  letter-spacing: -1px;
+  letter-spacing: -0.5px;
 }
 
 .content-grid,

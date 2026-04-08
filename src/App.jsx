@@ -265,16 +265,13 @@ function App() {
     currentPage * pageSize,
   )
 
-  const stats = useMemo(() => {
+  const publicHighlights = useMemo(() => {
     return [
-      { label: 'Field aktif', value: schema.fields.length },
-      { label: 'Total pendaftar', value: submissions.length },
-      {
-        label: 'Field wajib',
-        value: schema.fields.filter((field) => field.required).length,
-      },
+      { label: 'Kategori Lari', value: '5K, 10K, HM, FM' },
+      { label: 'Total Hadiah', value: 'Rp 200 Juta' },
+      { label: 'Benefit Eksklusif', value: 'Jersey & Medali' },
     ]
-  }, [schema.fields, submissions.length])
+  }, [])
 
   async function saveSchemaToServer(nextSchema) {
     setSaving(true)
@@ -588,9 +585,6 @@ function App() {
                 <a href="#registration-form" className="primary-btn">
                   Daftar Sekarang
                 </a>
-                <button className="ghost-btn" onClick={() => setActiveView('admin')}>
-                  Buka Admin
-                </button>
               </div>
             </div>
 
@@ -604,7 +598,7 @@ function App() {
           </section>
 
           <section className="stats-row">
-            {stats.map((item) => (
+            {publicHighlights.map((item) => (
               <article key={item.label} className="stat-card">
                 <span>{item.label}</span>
                 <strong>{item.value}</strong>
