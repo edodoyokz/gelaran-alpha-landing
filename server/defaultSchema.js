@@ -2,7 +2,7 @@ export const defaultSchema = {
   eventName: 'City Marathon 2026',
   tagline: 'Run For The Win! Join the biggest marathon event this year.',
   description:
-    'Daftarkan diri Anda untuk pengalaman lari tak terlupakan. Kumpulkan data peserta dan kelola registrasi dengan mudah.',
+    'Bersiaplah untuk memacu adrenalin di City Marathon 2026. Taklukan tantangan, cetak rekor pribadi, dan rasakan euforia lari bersama ribuan pelari lainnya di lintasan ikonik jantung kota.',
   location: 'City Center Start/Finish',
   date: '19 Oktober 2026',
   poster: '/new_running_poster.png',
