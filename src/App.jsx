@@ -45,6 +45,8 @@ const submissionSorts = [
   { value: 'nameDesc', label: 'Nama Z-A' },
 ]
 
+const apiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+
 function formatOptions(options = '') {
   return options
     .split(',')
@@ -53,7 +55,8 @@ function formatOptions(options = '') {
 }
 
 function apiUrl(path) {
-  return path
+  if (/^https?:\/\//.test(path)) return path
+  return apiBaseUrl ? `${apiBaseUrl}${path}` : path
 }
 
 function getPrimaryAnswer(submission) {
