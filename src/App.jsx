@@ -159,19 +159,33 @@ function App() {
     checkSession()
   }, [])
 
-  useEffect(() => {
-    if (activeView === 'admin' && isAdminAuthenticated) {
-      loadAdminData()
-    }
-  }, [activeView, isAdminAuthenticated, loadAdminData])
+  const loadAdminData = useCallback(async () => {
+    setSubmissionsLoading(true)
+    try {
+      const [schemaResponse, submissionsResponse] = await Promise.all([
+        apiFetch('/api/schema'),
+        apiFetch('/api/submissions'),
+      ])
 
-  useEffect(() => {
-    // Only reset to page 1 if the current page would be out of bounds
-    const maxPages = Math.max(1, Math.ceil(filteredSubmissions.length / pageSize))
-    if (currentPage > maxPages) {
-      setCurrentPage(1)
+      if (submissionsResponse.status === 401) {
+        setIsAdminAuthenticated(false)
+        setLoginError('Sesi admin berakhir. Silakan login lagi.')
+        return
+      }
+
+      const [schemaData, submissionsData] = await Promise.all([
+        schemaResponse.json(),
+        submissionsResponse.json(),
+      ])
+
+      setSchema(schemaData)
+      setSubmissions(submissionsData)
+    } catch {
+      setMessage('Gagal memuat data admin dari server.')
+    } finally {
+      setSubmissionsLoading(false)
     }
-  }, [submissionQuery, submissionFilter, submissionSort, filteredSubmissions.length, pageSize, currentPage])
+  }, [])
 
   const filteredSubmissions = useMemo(() => {
     const normalizedQuery = submissionQuery.trim().toLowerCase()
@@ -203,6 +217,20 @@ function App() {
       return getSubmissionTimeValue(right) - getSubmissionTimeValue(left)
     })
   }, [submissionFilter, submissionQuery, submissionSort, submissions])
+
+  useEffect(() => {
+    if (activeView === 'admin' && isAdminAuthenticated) {
+      loadAdminData()
+    }
+  }, [activeView, isAdminAuthenticated, loadAdminData])
+
+  useEffect(() => {
+    // Only reset to page 1 if the current page would be out of bounds
+    const maxPages = Math.max(1, Math.ceil(filteredSubmissions.length / pageSize))
+    if (currentPage > maxPages) {
+      setCurrentPage(1)
+    }
+  }, [submissionQuery, submissionFilter, submissionSort, filteredSubmissions.length, pageSize, currentPage])
 
   const analytics = useMemo(() => {
     const selectField = schema.fields.find((field) => field.type === 'select')
@@ -247,34 +275,6 @@ function App() {
       },
     ]
   }, [schema.fields, submissions.length])
-
-  const loadAdminData = useCallback(async () => {
-    setSubmissionsLoading(true)
-    try {
-      const [schemaResponse, submissionsResponse] = await Promise.all([
-        apiFetch('/api/schema'),
-        apiFetch('/api/submissions'),
-      ])
-
-      if (submissionsResponse.status === 401) {
-        setIsAdminAuthenticated(false)
-        setLoginError('Sesi admin berakhir. Silakan login lagi.')
-        return
-      }
-
-      const [schemaData, submissionsData] = await Promise.all([
-        schemaResponse.json(),
-        submissionsResponse.json(),
-      ])
-
-      setSchema(schemaData)
-      setSubmissions(submissionsData)
-    } catch {
-      setMessage('Gagal memuat data admin dari server.')
-    } finally {
-      setSubmissionsLoading(false)
-    }
-  }, [])
 
   async function saveSchemaToServer(nextSchema) {
     setSaving(true)
