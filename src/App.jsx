@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './index.css'
 
 const defaultSchema = {
@@ -117,11 +117,13 @@ function App() {
   const [formData, setFormData] = useState({})
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false)
-  const [loginForm, setLoginForm] = useState({ username: 'admin', password: 'admin123' })
-  const [loginError, setLoginError] = useState('')
-  const [submissionsLoading, setSubmissionsLoading] = useState(false)
+   const [saving, setSaving] = useState(false)
+   const [uploadingPoster, setUploadingPoster] = useState(false)
+   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false)
+   const [loginForm, setLoginForm] = useState({ username: '', password: '' })
+   const [loginError, setLoginError] = useState('')
+   const [loginLoading, setLoginLoading] = useState(false)
+   const [submissionsLoading, setSubmissionsLoading] = useState(false)
   const [submissionQuery, setSubmissionQuery] = useState('')
   const [submissionFilter, setSubmissionFilter] = useState('all')
   const [submissionSort, setSubmissionSort] = useState('newest')
@@ -161,11 +163,15 @@ function App() {
     if (activeView === 'admin' && isAdminAuthenticated) {
       loadAdminData()
     }
-  }, [activeView, isAdminAuthenticated])
+  }, [activeView, isAdminAuthenticated, loadAdminData])
 
   useEffect(() => {
-    setCurrentPage(1)
-  }, [submissionQuery, submissionFilter, submissionSort])
+    // Only reset to page 1 if the current page would be out of bounds
+    const maxPages = Math.max(1, Math.ceil(filteredSubmissions.length / pageSize))
+    if (currentPage > maxPages) {
+      setCurrentPage(1)
+    }
+  }, [submissionQuery, submissionFilter, submissionSort, filteredSubmissions.length, pageSize, currentPage])
 
   const filteredSubmissions = useMemo(() => {
     const normalizedQuery = submissionQuery.trim().toLowerCase()
@@ -242,7 +248,7 @@ function App() {
     ]
   }, [schema.fields, submissions.length])
 
-  async function loadAdminData() {
+  const loadAdminData = useCallback(async () => {
     setSubmissionsLoading(true)
     try {
       const [schemaResponse, submissionsResponse] = await Promise.all([
@@ -268,7 +274,7 @@ function App() {
     } finally {
       setSubmissionsLoading(false)
     }
-  }
+  }, [])
 
   async function saveSchemaToServer(nextSchema) {
     setSaving(true)
@@ -335,6 +341,7 @@ function App() {
     const file = event.target.files?.[0]
     if (!file) return
 
+    setUploadingPoster(true)
     const body = new FormData()
     body.append('poster', file)
 
@@ -350,11 +357,19 @@ function App() {
         return
       }
 
+      if (!response.ok) {
+        const errorData = await response.json()
+        setMessage(errorData.message || 'Gagal upload poster.')
+        return
+      }
+
       const data = await response.json()
       setSchema((current) => ({ ...current, poster: data.posterUrl }))
       setMessage('Poster berhasil diupload. Klik simpan perubahan untuk menyimpan schema.')
     } catch {
       setMessage('Gagal upload poster.')
+    } finally {
+      setUploadingPoster(false)
     }
   }
 
@@ -469,6 +484,7 @@ function App() {
     const params = new URLSearchParams({
       query: submissionQuery,
       filter: submissionFilter,
+      sort: submissionSort,
     })
     window.open(`${apiUrl('/api/export.csv')}?${params.toString()}`, '_blank', 'noopener,noreferrer')
   }
@@ -476,6 +492,7 @@ function App() {
   async function handleAdminLogin(event) {
     event.preventDefault()
     setLoginError('')
+    setLoginLoading(true)
 
     try {
       const response = await apiFetch('/api/auth/login', {
@@ -495,6 +512,8 @@ function App() {
       await loadAdminData()
     } catch {
       setLoginError('Tidak dapat terhubung ke server auth.')
+    } finally {
+      setLoginLoading(false)
     }
   }
 
@@ -511,7 +530,7 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={activeView === 'admin' ? "app-shell admin-mode" : "app-shell"}>
       <header className="topbar">
         <div>
           <p className="brand-mark">Gelaran</p>
@@ -677,18 +696,21 @@ function App() {
                 className={adminTab === 'settings' ? 'sidebar-btn active' : 'sidebar-btn'}
                 onClick={() => setAdminTab('settings')}
               >
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                 Informasi Event
               </button>
               <button
                 className={adminTab === 'builder' ? 'sidebar-btn active' : 'sidebar-btn'}
                 onClick={() => setAdminTab('builder')}
               >
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
                 Form Builder
               </button>
               <button
                 className={adminTab === 'submissions' ? 'sidebar-btn active' : 'sidebar-btn'}
                 onClick={() => setAdminTab('submissions')}
               >
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
                 Data Pendaftar ({submissions.length})
               </button>
             </nav>
@@ -763,8 +785,8 @@ function App() {
                   </div>
                   <div className="upload-actions">
                     <img src={schema.poster} alt="Current poster" className="mini-poster" />
-                    <button className="ghost-btn" onClick={() => fileInputRef.current?.click()}>
-                      Ganti Poster
+                    <button className="ghost-btn" onClick={() => fileInputRef.current?.click()} disabled={uploadingPoster}>
+                      {uploadingPoster ? 'Mengupload...' : 'Ganti Poster'}
                     </button>
                   </div>
                   <input
@@ -877,13 +899,16 @@ function App() {
                 </div>
                 {message && <p className="form-message mb-2">{message}</p>}
 
-                <div className="submission-toolbar three-cols">
+                <div className="submission-toolbar three-cols" role="search">
                   <input
+                    id="submission-search"
+                    aria-label="Cari data pendaftar berdasarkan nama, email, atau nomor"
                     value={submissionQuery}
                     onChange={(event) => setSubmissionQuery(event.target.value)}
                     placeholder="Cari nama, email, nomor..."
                   />
                   <select
+                    aria-label="Filter pendaftar"
                     value={submissionFilter}
                     onChange={(event) => setSubmissionFilter(event.target.value)}
                   >
@@ -894,6 +919,7 @@ function App() {
                     ))}
                   </select>
                   <select
+                    aria-label="Urutkan pendaftar"
                     value={submissionSort}
                     onChange={(event) => setSubmissionSort(event.target.value)}
                   >
@@ -931,11 +957,11 @@ function App() {
                 </div>
 
                 {submissionsLoading ? (
-                  <p className="empty-state">Memuat data peserta...</p>
+                  <p className="empty-state" role="status" aria-live="polite">Memuat data peserta...</p>
                 ) : (
                   <>
-                    <div className="table-responsive">
-                      <table className="data-table">
+                    <div className="table-responsive" role="region" aria-label="Tabel data pendaftar">
+                      <table className="data-table" aria-label="Data pendaftar event">
                         <thead>
                           <tr>
                             <th>Waktu Daftar</th>
@@ -1009,10 +1035,18 @@ function App() {
             <span className="eyebrow">Admin access</span>
             <h2>Login untuk masuk dashboard</h2>
             <p>Dashboard admin dilindungi. Gunakan akun admin untuk mengelola field, poster, dan data pendaftaran.</p>
-            <form className="registration-form" onSubmit={handleAdminLogin}>
+            <form
+              className="registration-form"
+              onSubmit={handleAdminLogin}
+              aria-label="Formulir login admin"
+            >
               <label className="field-block">
                 <span>Username</span>
                 <input
+                  id="admin-username"
+                  autoComplete="username"
+                  aria-required="true"
+                  aria-label="Username admin"
                   value={loginForm.username}
                   onChange={(event) =>
                     setLoginForm((current) => ({ ...current, username: event.target.value }))
@@ -1022,19 +1056,28 @@ function App() {
               <label className="field-block">
                 <span>Password</span>
                 <input
+                  id="admin-password"
                   type="password"
+                  autoComplete="current-password"
+                  aria-required="true"
+                  aria-label="Password admin"
                   value={loginForm.password}
                   onChange={(event) =>
                     setLoginForm((current) => ({ ...current, password: event.target.value }))
                   }
                 />
               </label>
-              <button type="submit" className="primary-btn full-width">
-                Login Admin
+              <button
+                type="submit"
+                className="primary-btn full-width"
+                disabled={loginLoading}
+                aria-busy={loginLoading}
+              >
+                {loginLoading ? 'Sedang login...' : 'Login Admin'}
               </button>
             </form>
-            {loginError ? <p className="form-message error">{loginError}</p> : null}
-            <p className="helper-text">Default demo login: `admin` / `admin123`</p>
+            {loginError ? <p className="form-message error" role="alert" aria-live="assertive">{loginError}</p> : null}
+            <p className="helper-text">Masukkan kredensial admin yang telah dikonfigurasi.</p>
           </section>
         </main>
       )}

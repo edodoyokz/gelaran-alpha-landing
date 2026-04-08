@@ -60,6 +60,11 @@ img {
   width: min(1240px, calc(100% - 32px));
   margin: 0 auto;
   padding: 24px 0 40px;
+  transition: max-width 0.4s ease;
+}
+
+.app-shell.admin-mode {
+  width: min(1600px, calc(100% - 32px));
 }
 
 .topbar,
@@ -67,7 +72,6 @@ img {
 .stat-card,
 .info-panel,
 .form-panel,
-.admin-main-card,
 .admin-side-card,
 .editor-card,
 .builder-item,
@@ -76,6 +80,13 @@ img {
   border: 1px solid rgba(44, 116, 111, 0.12);
   box-shadow: 0 18px 60px rgba(15, 59, 55, 0.08);
   backdrop-filter: blur(16px);
+}
+
+.admin-main-card {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 24px 80px rgba(15, 59, 55, 0.06);
+  backdrop-filter: blur(24px) saturate(150%);
 }
 
 .topbar {
@@ -164,12 +175,13 @@ img {
 
 .auth-card {
   width: min(100%, 560px);
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(44, 116, 111, 0.12);
-  box-shadow: 0 18px 60px rgba(15, 59, 55, 0.08);
-  backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 32px 80px rgba(15, 59, 55, 0.1);
+  backdrop-filter: blur(24px) saturate(150%);
   border-radius: 28px;
-  padding: 28px;
+  padding: 32px;
+  animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .auth-card h2 {
@@ -408,7 +420,9 @@ select:focus {
 }
 
 .admin-main-card {
-  padding: 28px;
+  padding: 32px;
+  border-radius: 28px;
+  animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .admin-grid,
@@ -582,13 +596,17 @@ select:focus {
   }
 }
 
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 /* Admin Sidebar */
 .admin-sidebar {
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(44, 116, 111, 0.12);
-  box-shadow: 0 18px 60px rgba(15, 59, 55, 0.08);
-  backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 24px 80px rgba(15, 59, 55, 0.06);
+  backdrop-filter: blur(24px) saturate(150%);
   border-radius: 28px;
   padding: 24px;
   display: flex;
@@ -618,17 +636,39 @@ select:focus {
   color: #5c6f6c;
   font-weight: 500;
   transition: all 0.2s ease;
+  border-left: 3px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sidebar-btn svg {
+  opacity: 0.6;
+  width: 20px;
+  height: 20px;
+  transition: all 0.2s ease;
 }
 
 .sidebar-btn:hover {
   background: rgba(33, 64, 61, 0.04);
   color: #183330;
+  border-left-color: rgba(33, 64, 61, 0.1);
+}
+
+.sidebar-btn:hover svg {
+  opacity: 1;
 }
 
 .sidebar-btn.active {
-  background: rgba(239, 123, 69, 0.1);
-  color: #ef7b45;
+  background: rgba(239, 123, 69, 0.08);
+  color: #c95116;
   font-weight: 600;
+  border-left-color: #ef7b45;
+}
+
+.sidebar-btn.active svg {
+  opacity: 1;
+  color: #ef7b45;
 }
 
 .sidebar-footer {
@@ -691,10 +731,12 @@ select:focus {
 /* Table Styling */
 .table-responsive {
   width: 100%;
+  max-height: 600px;
+  overflow-y: auto;
   overflow-x: auto;
   border-radius: 16px;
   border: 1px solid rgba(33, 64, 61, 0.14);
-  background: #fff;
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .data-table {
@@ -711,18 +753,27 @@ select:focus {
 }
 
 .data-table th {
-  background: rgba(245, 251, 251, 0.95);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(12px);
+  background: rgba(245, 251, 251, 0.88);
   font-weight: 600;
   color: #274744;
   white-space: nowrap;
+  box-shadow: 0 1px 0 rgba(33, 64, 61, 0.08);
 }
 
 .data-table tbody tr:last-child td {
   border-bottom: none;
 }
 
+.data-table tbody tr {
+  transition: background-color 0.2s ease;
+}
+
 .data-table tbody tr:hover {
-  background: rgba(245, 251, 251, 0.4);
+  background: rgba(239, 123, 69, 0.04);
 }
 
 .delete-btn-small {
@@ -746,9 +797,12 @@ select:focus {
 
 .analytics-card {
   border-radius: 18px;
-  border: 1px solid rgba(33, 64, 61, 0.1);
-  background: rgba(245, 251, 251, 0.72);
-  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(245, 251, 251, 0.6));
+  box-shadow: 0 8px 30px rgba(33, 64, 61, 0.05);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
 }
 
 .analytics-card span {
@@ -794,6 +848,7 @@ select:focus {
   height: 100%;
   border-radius: 999px;
   background: linear-gradient(135deg, #ef7b45, #e75f2d);
+  transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .analytics-item strong {
