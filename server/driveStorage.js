@@ -4,14 +4,18 @@ import { google } from 'googleapis'
 const DRIVE_DB_FILE = 'event-registration-db.json'
 
 function getDriveConfig() {
-  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
-  const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, '\n')
+  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
+  const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN
+  const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI || 'http://localhost:3001/oauth2callback'
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID
 
   return {
-    enabled: Boolean(clientEmail && privateKey && folderId),
-    clientEmail,
-    privateKey,
+    enabled: Boolean(clientId && clientSecret && refreshToken && folderId),
+    clientId,
+    clientSecret,
+    refreshToken,
+    redirectUri,
     folderId,
   }
 }
@@ -20,12 +24,14 @@ function createDriveClient() {
   const config = getDriveConfig()
   if (!config.enabled) return null
 
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: config.clientEmail,
-      private_key: config.privateKey,
-    },
-    scopes: ['https://www.googleapis.com/auth/drive'],
+  const auth = new google.auth.OAuth2(
+    config.clientId,
+    config.clientSecret,
+    config.redirectUri,
+  )
+
+  auth.setCredentials({
+    refresh_token: config.refreshToken,
   })
 
   return google.drive({ version: 'v3', auth })
@@ -36,6 +42,8 @@ async function findFileByName(drive, folderId, fileName) {
     q: `'${folderId}' in parents and name = '${fileName}' and trashed = false`,
     fields: 'files(id, name)',
     pageSize: 1,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
   })
 
   return response.data.files?.[0] || null
@@ -54,7 +62,7 @@ export async function readDriveJson(fallbackValue) {
   if (!existingFile) return fallbackValue
 
   const response = await drive.files.get(
-    { fileId: existingFile.id, alt: 'media' },
+    { fileId: existingFile.id, alt: 'media', supportsAllDrives: true },
     { responseType: 'text' },
   )
 
@@ -76,6 +84,7 @@ export async function writeDriveJson(data) {
     await drive.files.update({
       fileId: existingFile.id,
       media,
+      supportsAllDrives: true,
     })
     return true
   }
@@ -88,6 +97,7 @@ export async function writeDriveJson(data) {
     },
     media,
     fields: 'id',
+    supportsAllDrives: true,
   })
   return true
 }
@@ -107,12 +117,14 @@ export async function uploadDriveFile({ fileName, mimeType, buffer }) {
       body: Readable.from(buffer),
     },
     fields: 'id, webViewLink, webContentLink',
+    supportsAllDrives: true,
   })
 
   const fileId = response.data.id
   await drive.permissions.create({
     fileId,
     requestBody: { role: 'reader', type: 'anyone' },
+    supportsAllDrives: true,
   })
 
   return `https://drive.google.com/uc?id=${fileId}`
