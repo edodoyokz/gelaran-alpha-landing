@@ -620,9 +620,9 @@ function App() {
               </div>
               <p>{schema.description}</p>
               <ul className="feature-list">
-                <li>Pengalaman pendaftaran lebih profesional daripada Google Form.</li>
-                <li>Poster event tampil langsung di landing page.</li>
-                <li>Field pendaftaran bisa diatur ulang kapan saja oleh admin.</li>
+                <li><strong>Lintasan Steril & Aman</strong>: Rute lari di jantung kota dengan pengawalan penuh dan water station di setiap 2.5km.</li>
+                <li><strong>Timing System Akurat</strong>: Sistem pencatatan waktu real-time menggunakan teknologi chip untuk akurasi maksimal.</li>
+                <li><strong>Race Kit & Medali</strong>: Jersey drifit premium, nomor BIB, dan medali finisher eksklusif untuk setiap peserta.</li>
               </ul>
             </article>
 

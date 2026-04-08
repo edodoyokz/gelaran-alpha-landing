@@ -244,8 +244,7 @@ img {
   margin: 28px 0;
 }
 
-.meta-row div,
-.poster-badge {
+.meta-row div {
   border-radius: 20px;
   padding: 14px 18px;
   background: rgba(245, 251, 251, 0.95);
@@ -294,9 +293,15 @@ img {
 
 .poster-badge {
   position: absolute;
-  left: -12px;
-  right: 32px;
-  bottom: 18px;
+  left: -20px;
+  bottom: 32px;
+  padding: 16px 24px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 16px 40px rgba(18, 59, 55, 0.15);
+  backdrop-filter: blur(16px) saturate(140%);
+  border-radius: 20px;
+  max-width: 85%;
 }
 
 .stats-row {
