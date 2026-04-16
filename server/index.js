@@ -126,6 +126,10 @@ function ensureStorageInVercel(res) {
 export function createApp() {
   const app = express()
 
+  // Trust proxy when behind a reverse proxy (Vercel, nginx, etc.)
+  // Required for express-rate-limit to read the real client IP from X-Forwarded-For
+  app.set('trust proxy', 1)
+
   // Rate limiting - auth endpoints
   const authRateLimit = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
