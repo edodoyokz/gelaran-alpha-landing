@@ -58,4 +58,38 @@ export const defaultSchema = {
       options: '',
     },
   ],
+  emailConfig: {
+    enabled: false,
+    fromName: 'City Marathon 2026',
+    fromEmail: 'noreply@yourdomain.com',
+    replyTo: 'support@yourdomain.com',
+    participantEmail: {
+      enabled: true,
+      subject: 'Konfirmasi Pendaftaran - {{eventName}}',
+      template: {
+        headerColor: '#2563eb',
+        logoUrl: '',
+        greeting: 'Terima kasih telah mendaftar!',
+        bodyText: 'Pendaftaran Anda untuk {{eventName}} telah kami terima. Kami sangat senang Anda bergabung dengan kami!',
+        instructions: 'Langkah selanjutnya:\n1. Cek email ini sebagai bukti pendaftaran\n2. Simpan nomor registrasi Anda: {{registrationId}}\n3. Tunggu konfirmasi pembayaran dari tim kami\n4. Jika ada pertanyaan, hubungi kami di {{replyTo}}',
+        footerText: 'Email ini dikirim otomatis. Jika ada pertanyaan, silakan hubungi kami di {{replyTo}}',
+        showEventDetails: true,
+        showRegistrationData: true,
+      },
+    },
+    adminEmail: {
+      enabled: true,
+      subject: 'Pendaftaran Baru - {{participantName}}',
+      template: {
+        headerColor: '#059669',
+        logoUrl: '',
+        greeting: 'Pendaftaran Baru Diterima',
+        bodyText: 'Ada peserta baru yang mendaftar untuk {{eventName}}.',
+        instructions: '',
+        footerText: 'Notifikasi otomatis dari sistem pendaftaran.',
+        showEventDetails: false,
+        showRegistrationData: true,
+      },
+    },
+  },
 }

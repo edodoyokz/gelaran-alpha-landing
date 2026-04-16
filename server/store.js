@@ -107,3 +107,15 @@ export async function resetDb() {
 export function getStorageMode() {
   return isSupabaseEnabled() ? 'supabase' : 'local-file'
 }
+
+export async function getEmailConfig() {
+  const schema = await getSchema()
+  return schema.emailConfig || defaultSchema.emailConfig
+}
+
+export async function saveEmailConfig(emailConfig) {
+  const schema = await getSchema()
+  schema.emailConfig = emailConfig
+  await saveSchema(schema)
+  return emailConfig
+}

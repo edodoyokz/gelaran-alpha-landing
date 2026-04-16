@@ -18,9 +18,12 @@ import {
   getSubmissions,
   resetDb,
   saveSchema,
+  getEmailConfig,
+  saveEmailConfig,
 } from './store.js'
 import { isR2StorageEnabled, uploadR2File } from './r2Storage.js'
 import { isSupabaseEnabled } from './supabaseStorage.js'
+import { sendParticipantEmail, sendAdminNotification, sendTestEmail } from './emailService.js'
 
 // CSRF Protection Middleware
 function createCsrfMiddleware() {
@@ -320,6 +323,37 @@ export function createApp() {
     res.json(saved)
   })
 
+  app.get('/api/email-config', requireAdmin, async (_req, res) => {
+    res.json(await getEmailConfig())
+  })
+
+  app.put('/api/email-config', requireAdmin, csrf.validateToken, async (req, res) => {
+    if (!ensureStorageInVercel(res)) return
+
+    const saved = await saveEmailConfig(req.body)
+    res.json(saved)
+  })
+
+  app.post('/api/email-config/test', requireAdmin, csrf.validateToken, async (req, res) => {
+    if (!ensureStorageInVercel(res)) return
+
+    const { recipient, emailType } = req.body
+
+    if (!recipient || typeof recipient !== 'string') {
+      return res.status(400).json({ message: 'Email recipient wajib diisi.' })
+    }
+
+    try {
+      const emailConfig = await getEmailConfig()
+      const schema = await getSchema()
+      const result = await sendTestEmail(emailConfig, schema, recipient, emailType)
+      res.json({ success: true, result })
+    } catch (error) {
+      console.error('[EMAIL] Test email failed:', error)
+      res.status(500).json({ message: error.message || 'Gagal mengirim test email.' })
+    }
+  })
+
   app.get('/api/submissions', requireAdmin, async (_req, res) => {
     res.json(await getSubmissions())
   })
@@ -372,7 +406,32 @@ export function createApp() {
       answers: req.body.answers,
     }
 
-    res.status(201).json(await addSubmission(submission))
+    const savedSubmission = await addSubmission(submission)
+
+    // Send emails if enabled
+    try {
+      const emailConfig = await getEmailConfig()
+      if (emailConfig.enabled) {
+        const schema = await getSchema()
+        
+        // Send participant email
+        if (emailConfig.participantEmail.enabled) {
+          await sendParticipantEmail(emailConfig, schema, savedSubmission.answers)
+          console.info(`[EMAIL] Participant email sent to ${savedSubmission.answers.email}`)
+        }
+
+        // Send admin notification
+        if (emailConfig.adminEmail.enabled) {
+          await sendAdminNotification(emailConfig, schema, savedSubmission.answers)
+          console.info(`[EMAIL] Admin notification sent`)
+        }
+      }
+    } catch (error) {
+      // Log error but don't fail the submission
+      console.error('[EMAIL] Failed to send email:', error)
+    }
+
+    res.status(201).json(savedSubmission)
   })
 
   app.post('/api/upload-poster', requireAdmin, csrf.validateToken, upload.single('poster'), async (req, res) => {

@@ -170,6 +170,10 @@ function App() {
   const [submissionSort, setSubmissionSort] = useState('newest')
   const [currentPage, setCurrentPage] = useState(1)
   const [deletingSubmissionId, setDeletingSubmissionId] = useState('')
+  const [emailConfig, setEmailConfig] = useState(null)
+  const [testEmailRecipient, setTestEmailRecipient] = useState('')
+  const [testEmailType, setTestEmailType] = useState('participant')
+  const [sendingTestEmail, setSendingTestEmail] = useState(false)
   const fileInputRef = useRef(null)
   const pageSize = 5
 
@@ -224,9 +228,10 @@ function App() {
   const loadAdminData = useCallback(async () => {
     setSubmissionsLoading(true)
     try {
-      const [schemaResponse, submissionsResponse] = await Promise.all([
+      const [schemaResponse, submissionsResponse, emailConfigResponse] = await Promise.all([
         apiFetch('/api/schema'),
         apiFetch('/api/submissions'),
+        apiFetch('/api/email-config'),
       ])
 
       if (submissionsResponse.status === 401) {
@@ -235,13 +240,15 @@ function App() {
         return
       }
 
-      const [schemaData, submissionsData] = await Promise.all([
+      const [schemaData, submissionsData, emailConfigData] = await Promise.all([
         schemaResponse.json(),
         submissionsResponse.json(),
+        emailConfigResponse.json(),
       ])
 
       setSchema(schemaData)
       setSubmissions(submissionsData)
+      setEmailConfig(emailConfigData)
     } catch (err) {
       logError(err, { context: 'loadAdminData' })
       setMessage('Gagal memuat data admin dari server.')
@@ -645,6 +652,96 @@ function App() {
     setMessage('Anda sudah logout dari dashboard admin.')
   }
 
+  async function saveEmailConfig() {
+    if (!emailConfig) {
+      setMessage('Konfigurasi email belum dimuat.')
+      return
+    }
+
+    setSaving(true)
+    try {
+      const response = await apiFetch('/api/email-config', {
+        method: 'PUT',
+        body: JSON.stringify(emailConfig),
+      })
+
+      if (response.status === 401) {
+        setIsAdminAuthenticated(false)
+        setLoginError('Anda harus login sebagai admin.')
+        return
+      }
+
+      const savedConfig = await response.json()
+      setEmailConfig(savedConfig)
+      setMessage('Konfigurasi email berhasil disimpan.')
+    } catch {
+      setMessage('Gagal menyimpan konfigurasi email.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function sendTestEmail() {
+    if (!emailConfig) {
+      setMessage('Konfigurasi email belum dimuat.')
+      return
+    }
+
+    if (!testEmailRecipient) {
+      setMessage('Masukkan email penerima untuk test email.')
+      return
+    }
+
+    setSendingTestEmail(true)
+    setMessage('')
+    try {
+      const response = await apiFetch('/api/email-config/test', {
+        method: 'POST',
+        body: JSON.stringify({
+          recipient: testEmailRecipient,
+          type: testEmailType,
+        }),
+      })
+
+      if (response.status === 401) {
+        setIsAdminAuthenticated(false)
+        setLoginError('Anda harus login sebagai admin.')
+        return
+      }
+
+      const result = await response.json()
+      
+      if (result.error) {
+        setMessage(`Gagal mengirim test email: ${result.message || 'Unknown error'}`)
+      } else if (result.skipped) {
+        setMessage(`Test email tidak dikirim: ${result.reason}`)
+      } else {
+        setMessage('Test email berhasil dikirim! Cek inbox Anda.')
+      }
+    } catch (error) {
+      setMessage('Gagal mengirim test email. Pastikan konfigurasi sudah benar.')
+    } finally {
+      setSendingTestEmail(false)
+    }
+  }
+
+  function updateEmailConfig(key, value) {
+    setEmailConfig((current) => {
+      if (!current) return current
+      return { ...current, [key]: value }
+    })
+  }
+
+  function updateEmailConfigNested(section, key, value) {
+    setEmailConfig((current) => {
+      if (!current || !current[section]) return current
+      return {
+        ...current,
+        [section]: { ...current[section], [key]: value },
+      }
+    })
+  }
+
   if (loading) {
     return <div className="loading-screen">Memuat webapp event...</div>
   }
@@ -855,6 +952,13 @@ function App() {
               >
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
                 Data Pendaftar ({submissions.length})
+              </button>
+              <button
+                className={adminTab === 'email' ? 'sidebar-btn active' : 'sidebar-btn'}
+                onClick={() => setAdminTab('email')}
+              >
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                Email Settings
               </button>
             </nav>
 
@@ -1253,6 +1357,199 @@ function App() {
                         </button>
                       </div>
                     </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {adminTab === 'email' && (
+              <div className="admin-main-card">
+                {!emailConfig ? (
+                  <p className="empty-state" role="status" aria-live="polite">Memuat konfigurasi email...</p>
+                ) : (
+                  <>
+                    <div className="panel-head inline-head">
+                      <div>
+                        <h3>Email Settings</h3>
+                        <p>Konfigurasi email otomatis untuk peserta dan admin</p>
+                      </div>
+                      <button className="primary-btn" onClick={saveEmailConfig}>
+                        {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
+                      </button>
+                    </div>
+                    {message && <p className="form-message mb-2">{message}</p>}
+
+                <div className="admin-form-section">
+                  <label className="field-block">
+                    <div className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={emailConfig.enabled}
+                        onChange={(e) => updateEmailConfig('enabled', e.target.checked)}
+                      />
+                      <span>Aktifkan pengiriman email otomatis</span>
+                    </div>
+                  </label>
+
+                  <label className="field-block">
+                    <span>Resend API Key</span>
+                    <input
+                      type="password"
+                      value={emailConfig.resendApiKey}
+                      onChange={(e) => updateEmailConfig('resendApiKey', e.target.value)}
+                      placeholder="re_..."
+                    />
+                  </label>
+
+                  <label className="field-block">
+                    <span>From Email</span>
+                    <input
+                      type="email"
+                      value={emailConfig.fromEmail}
+                      onChange={(e) => updateEmailConfig('fromEmail', e.target.value)}
+                      placeholder="noreply@yourdomain.com"
+                    />
+                  </label>
+
+                  <label className="field-block">
+                    <span>From Name</span>
+                    <input
+                      value={emailConfig.fromName}
+                      onChange={(e) => updateEmailConfig('fromName', e.target.value)}
+                      placeholder="Event Team"
+                    />
+                  </label>
+                </div>
+
+                <div className="admin-form-section">
+                  <div className="panel-head compact-head">
+                    <div>
+                      <h4>Email Peserta</h4>
+                      <p>Email konfirmasi yang dikirim ke peserta setelah pendaftaran</p>
+                    </div>
+                  </div>
+
+                  <label className="field-block">
+                    <div className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={emailConfig.participantEmail.enabled}
+                        onChange={(e) => updateEmailConfigNested('participantEmail', 'enabled', e.target.checked)}
+                      />
+                      <span>Kirim email ke peserta</span>
+                    </div>
+                  </label>
+
+                  <label className="field-block">
+                    <span>Subject</span>
+                    <input
+                      value={emailConfig.participantEmail.subject}
+                      onChange={(e) => updateEmailConfigNested('participantEmail', 'subject', e.target.value)}
+                      placeholder="Konfirmasi Pendaftaran"
+                    />
+                  </label>
+
+                  <label className="field-block">
+                    <span>Body Template</span>
+                    <textarea
+                      rows="8"
+                      value={emailConfig.participantEmail.body}
+                      onChange={(e) => updateEmailConfigNested('participantEmail', 'body', e.target.value)}
+                      placeholder="Gunakan {{eventName}}, {{name}}, {{email}}, dll"
+                    />
+                    <small>Variabel tersedia: {'{'}{'{'} eventName {'}'}{'}'}, {'{'}{'{'} name {'}'}{'}'}, {'{'}{'{'} email {'}'}{'}'}, {'{'}{'{'} location {'}'}{'}'}, {'{'}{'{'} date {'}'}{'}'}. Gunakan {'{'}{'{'} fieldName {'}'}{'}'}  untuk field custom.</small>
+                  </label>
+                </div>
+
+                <div className="admin-form-section">
+                  <div className="panel-head compact-head">
+                    <div>
+                      <h4>Email Admin</h4>
+                      <p>Notifikasi yang dikirim ke admin setiap ada pendaftaran baru</p>
+                    </div>
+                  </div>
+
+                  <label className="field-block">
+                    <div className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={emailConfig.adminEmail.enabled}
+                        onChange={(e) => updateEmailConfigNested('adminEmail', 'enabled', e.target.checked)}
+                      />
+                      <span>Kirim notifikasi ke admin</span>
+                    </div>
+                  </label>
+
+                  <label className="field-block">
+                    <span>Admin Email</span>
+                    <input
+                      type="email"
+                      value={emailConfig.adminEmail.recipient}
+                      onChange={(e) => updateEmailConfigNested('adminEmail', 'recipient', e.target.value)}
+                      placeholder="admin@yourdomain.com"
+                    />
+                  </label>
+
+                  <label className="field-block">
+                    <span>Subject</span>
+                    <input
+                      value={emailConfig.adminEmail.subject}
+                      onChange={(e) => updateEmailConfigNested('adminEmail', 'subject', e.target.value)}
+                      placeholder="Pendaftaran Baru"
+                    />
+                  </label>
+
+                  <label className="field-block">
+                    <span>Body Template</span>
+                    <textarea
+                      rows="8"
+                      value={emailConfig.adminEmail.body}
+                      onChange={(e) => updateEmailConfigNested('adminEmail', 'body', e.target.value)}
+                      placeholder="Gunakan {{eventName}}, {{name}}, {{email}}, dll"
+                    />
+                    <small>Variabel tersedia: {'{'}{'{'} eventName {'}'}{'}'}, {'{'}{'{'} name {'}'}{'}'}, {'{'}{'{'} email {'}'}{'}'}, {'{'}{'{'} location {'}'}{'}'}, {'{'}{'{'} date {'}'}{'}'}. Gunakan {'{'}{'{'} fieldName {'}'}{'}'}  untuk field custom.</small>
+                  </label>
+                </div>
+
+                <div className="admin-form-section">
+                  <div className="panel-head compact-head">
+                    <div>
+                      <h4>Test Email</h4>
+                      <p>Kirim test email untuk memastikan konfigurasi bekerja dengan baik</p>
+                    </div>
+                  </div>
+
+                  <div className="admin-form-grid builder-grid">
+                    <label className="field-block">
+                      <span>Email Recipient</span>
+                      <input
+                        type="email"
+                        value={testEmailRecipient}
+                        onChange={(e) => setTestEmailRecipient(e.target.value)}
+                        placeholder="test@example.com"
+                      />
+                    </label>
+
+                    <label className="field-block">
+                      <span>Email Type</span>
+                      <select
+                        value={testEmailType}
+                        onChange={(e) => setTestEmailType(e.target.value)}
+                      >
+                        <option value="participant">Email Peserta</option>
+                        <option value="admin">Email Admin</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <button 
+                    className="ghost-btn" 
+                    onClick={sendTestEmail}
+                    disabled={sendingTestEmail || !testEmailRecipient}
+                  >
+                    {sendingTestEmail ? 'Mengirim...' : 'Kirim Test Email'}
+                  </button>
+                </div>
                   </>
                 )}
               </div>
