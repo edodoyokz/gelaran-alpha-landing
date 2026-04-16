@@ -320,12 +320,12 @@ function App() {
   )
 
   const publicHighlights = useMemo(() => {
-    return [
-      { label: 'Kategori Lari', value: '5K, 10K, HM, FM' },
-      { label: 'Total Hadiah', value: 'Rp 200 Juta' },
-      { label: 'Benefit Eksklusif', value: 'Jersey & Medali' },
-    ]
-  }, [])
+    // Use schema highlights if available, otherwise fallback to default
+    if (schema.highlights && Array.isArray(schema.highlights) && schema.highlights.length > 0) {
+      return schema.highlights
+    }
+    return defaultSchema.highlights
+  }, [schema.highlights])
 
   async function saveSchemaToServer(nextSchema) {
     setSaving(true)
@@ -385,6 +385,58 @@ function App() {
     setSchema((current) => ({
       ...current,
       fields: current.fields.filter((field) => field.id !== id),
+    }))
+  }
+
+  function addHighlight() {
+    setSchema((current) => ({
+      ...current,
+      highlights: [
+        ...current.highlights,
+        { label: 'Label Baru', value: 'Nilai Baru' },
+      ],
+    }))
+  }
+
+  function updateHighlight(index, key, value) {
+    setSchema((current) => ({
+      ...current,
+      highlights: current.highlights.map((highlight, i) =>
+        i === index ? { ...highlight, [key]: value } : highlight
+      ),
+    }))
+  }
+
+  function removeHighlight(index) {
+    setSchema((current) => ({
+      ...current,
+      highlights: current.highlights.filter((_, i) => i !== index),
+    }))
+  }
+
+  function addFeature() {
+    setSchema((current) => ({
+      ...current,
+      features: [
+        ...current.features,
+        { title: 'Fitur Baru', description: 'Deskripsi fitur baru.' },
+      ],
+    }))
+  }
+
+  function updateFeature(index, key, value) {
+    setSchema((current) => ({
+      ...current,
+      features: current.features.map((feature, i) =>
+        i === index ? { ...feature, [key]: value } : feature
+      ),
+    }))
+  }
+
+  function removeFeature(index) {
+    setSchema((current) => ({
+      ...current,
+      features: current.features.filter((_, i) => i !== index),
     }))
   }
 
@@ -670,9 +722,9 @@ function App() {
               </div>
               <p>{schema.description}</p>
               <ul className="feature-list">
-                <li><strong>Lintasan Steril & Aman</strong>: Rute lari di jantung kota dengan pengawalan penuh dan water station di setiap 2.5km.</li>
-                <li><strong>Timing System Akurat</strong>: Sistem pencatatan waktu real-time menggunakan teknologi chip untuk akurasi maksimal.</li>
-                <li><strong>Race Kit & Medali</strong>: Jersey drifit premium, nomor BIB, dan medali finisher eksklusif untuk setiap peserta.</li>
+                {((schema.features && Array.isArray(schema.features) && schema.features.length > 0) ? schema.features : defaultSchema.features).map((feature, index) => (
+                  <li key={index}><strong>{feature.title}</strong>: {feature.description}</li>
+                ))}
               </ul>
             </article>
 
@@ -857,6 +909,93 @@ function App() {
                     hidden
                     onChange={handlePosterUpload}
                   />
+                </div>
+
+                <div className="admin-form-section">
+                  <div className="panel-head compact-head">
+                    <div>
+                      <h4>Highlights Landing Page</h4>
+                      <p>Statistik dan informasi penting yang tampil di landing page.</p>
+                    </div>
+                    <button className="ghost-btn" onClick={addHighlight}>
+                      Tambah Highlight
+                    </button>
+                  </div>
+
+                  <div className="builder-list">
+                    {schema.highlights.map((highlight, index) => (
+                      <section key={index} className="builder-item">
+                        <div className="builder-item-head">
+                          <strong>Highlight {index + 1}</strong>
+                          <button className="delete-btn" onClick={() => removeHighlight(index)}>
+                            Hapus
+                          </button>
+                        </div>
+                        <div className="admin-form-grid builder-grid">
+                          <label className="field-block">
+                            <span>Label</span>
+                            <input
+                              value={highlight.label}
+                              onChange={(event) => updateHighlight(index, 'label', event.target.value)}
+                              placeholder="Contoh: Kategori Lari"
+                            />
+                          </label>
+                          <label className="field-block">
+                            <span>Value</span>
+                            <input
+                              value={highlight.value}
+                              onChange={(event) => updateHighlight(index, 'value', event.target.value)}
+                              placeholder="Contoh: 5K, 10K, HM, FM"
+                            />
+                          </label>
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="admin-form-section">
+                  <div className="panel-head compact-head">
+                    <div>
+                      <h4>Fitur Unggulan</h4>
+                      <p>Daftar fitur dan benefit yang tampil di landing page.</p>
+                    </div>
+                    <button className="ghost-btn" onClick={addFeature}>
+                      Tambah Fitur
+                    </button>
+                  </div>
+
+                  <div className="builder-list">
+                    {schema.features.map((feature, index) => (
+                      <section key={index} className="builder-item">
+                        <div className="builder-item-head">
+                          <strong>Fitur {index + 1}</strong>
+                          <button className="delete-btn" onClick={() => removeFeature(index)}>
+                            Hapus
+                          </button>
+                        </div>
+                        <div className="admin-form-grid builder-grid">
+                          <label className="field-block">
+                            <span>Judul</span>
+                            <input
+                              value={feature.title}
+                              onChange={(event) => updateFeature(index, 'title', event.target.value)}
+                              placeholder="Contoh: Lintasan Steril & Aman"
+                            />
+                          </label>
+                          <label className="field-block field-full">
+                            <span>Deskripsi</span>
+                            <textarea
+                              rows="3"
+                              value={feature.description}
+                              onChange={(event) => updateFeature(index, 'description', event.target.value)}
+                              placeholder="Deskripsi lengkap fitur ini"
+                            />
+                          </label>
+                        </div>
+                      </section>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}

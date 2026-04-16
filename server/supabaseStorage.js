@@ -36,6 +36,8 @@ function rowToSchema(row) {
     date: row.date,
     poster: row.poster,
     fields: row.fields,
+    highlights: row.highlights ?? [],
+    features: row.features ?? [],
   }
 }
 
@@ -50,6 +52,8 @@ function schemaToRow(schema) {
     date: schema.date ?? '',
     poster: schema.poster ?? '',
     fields: schema.fields ?? [],
+    highlights: schema.highlights ?? [],
+    features: schema.features ?? [],
     updated_at: new Date().toISOString(),
   }
 }

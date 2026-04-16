@@ -112,6 +112,8 @@ CREATE TABLE event_schema (
   date TEXT NOT NULL,
   poster TEXT NOT NULL,
   fields JSONB NOT NULL,
+  highlights JSONB DEFAULT '[]'::jsonb,
+  features JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -128,6 +130,17 @@ CREATE TABLE submissions (
 -- Row-Level Security (RLS) - disable untuk service role
 ALTER TABLE event_schema DISABLE ROW LEVEL SECURITY;
 ALTER TABLE submissions DISABLE ROW LEVEL SECURITY;
+
+## Migration untuk Database yang Sudah Ada
+
+Jika database Supabase sudah dibuat dengan schema lama, jalankan SQL berikut untuk menambah kolom yang diperlukan:
+
+```sql
+-- Tambah kolom highlights dan features untuk landing page
+ALTER TABLE event_schema
+ADD COLUMN highlights JSONB DEFAULT '[]'::jsonb,
+ADD COLUMN features JSONB DEFAULT '[]'::jsonb;
+```
 ```
 
 ## Setup Cloudflare R2 (Opsional)

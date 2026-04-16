@@ -5,7 +5,7 @@ export function validateEventSchema(schema) {
     throw new Error('Schema harus berupa objek.')
   }
 
-  const requiredFields = ['eventName', 'tagline', 'description', 'location', 'date', 'poster', 'fields']
+  const requiredFields = ['eventName', 'tagline', 'description', 'location', 'date', 'poster', 'fields', 'highlights', 'features']
   for (const field of requiredFields) {
     if (!(field in schema)) {
       throw new Error(`Field ${field} wajib ada dalam schema.`)
@@ -53,6 +53,36 @@ export function validateEventSchema(schema) {
 
     if (typeof field.required !== 'boolean') {
       throw new Error(`Field required harus berupa boolean.`)
+    }
+  }
+
+  // Validate highlights array
+  if (!Array.isArray(schema.highlights)) {
+    throw new Error('Field highlights harus berupa array.')
+  }
+
+  for (let i = 0; i < schema.highlights.length; i++) {
+    const highlight = schema.highlights[i]
+    if (!highlight || typeof highlight !== 'object') {
+      throw new Error(`Highlight pada index ${i} tidak valid.`)
+    }
+    if (typeof highlight.label !== 'string' || typeof highlight.value !== 'string') {
+      throw new Error(`Highlight pada index ${i} harus memiliki label dan value berupa string.`)
+    }
+  }
+
+  // Validate features array
+  if (!Array.isArray(schema.features)) {
+    throw new Error('Field features harus berupa array.')
+  }
+
+  for (let i = 0; i < schema.features.length; i++) {
+    const feature = schema.features[i]
+    if (!feature || typeof feature !== 'object') {
+      throw new Error(`Feature pada index ${i} tidak valid.`)
+    }
+    if (typeof feature.title !== 'string' || typeof feature.description !== 'string') {
+      throw new Error(`Feature pada index ${i} harus memiliki title dan description berupa string.`)
     }
   }
 

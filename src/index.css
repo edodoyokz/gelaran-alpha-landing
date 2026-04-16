@@ -472,7 +472,8 @@ select:focus {
   align-items: center;
 }
 
-.upload-card {
+.upload-card,
+.admin-form-section {
   border-top: 1px solid rgba(33, 64, 61, 0.1);
   margin-top: 22px;
   padding-top: 22px;
