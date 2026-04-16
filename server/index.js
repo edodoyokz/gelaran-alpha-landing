@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import bcrypt from 'bcrypt'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import express from 'express'
@@ -8,6 +9,7 @@ import crypto from 'node:crypto'
 import multer from 'multer'
 import rateLimit from 'express-rate-limit'
 import { createAdminSessionToken, verifyAdminSessionToken } from './adminAuth.js'
+import { validateEventSchema, validateSubmission } from '../shared/validation.js'
 import {
   addSubmission,
   deleteSubmission,
@@ -19,6 +21,48 @@ import {
 } from './store.js'
 import { isR2StorageEnabled, uploadR2File } from './r2Storage.js'
 import { isSupabaseEnabled } from './supabaseStorage.js'
+
+// CSRF Protection Middleware
+function createCsrfMiddleware() {
+  const csrfTokens = new Map()
+
+  function generateCsrfToken(sessionId) {
+    const token = crypto.randomBytes(32).toString('hex')
+    csrfTokens.set(sessionId, token)
+    return token
+  }
+
+  function validateCsrfToken(sessionId, token) {
+    const storedToken = csrfTokens.get(sessionId)
+    return storedToken === token
+  }
+
+  return {
+    generateToken: (req, res, next) => {
+      if (isAuthenticated(req)) {
+        const sessionId = req.cookies.admin_session
+        const token = generateCsrfToken(sessionId)
+        res.locals.csrfToken = token
+      }
+      next()
+    },
+    validateToken: (req, res, next) => {
+      if (!isAuthenticated(req)) {
+        return next()
+      }
+
+      const sessionId = req.cookies.admin_session
+      const token = req.headers['x-csrf-token'] || req.body._csrf
+
+      if (!token || !validateCsrfToken(sessionId, token)) {
+        console.warn(`[CSRF] Invalid CSRF token — IP: ${req.ip}, Path: ${req.path}`)
+        return res.status(403).json({ message: 'Invalid CSRF token' })
+      }
+
+      next()
+    }
+  }
+}
 
 const port = process.env.PORT || 3001
 const uploadsDir = path.resolve('public/uploads')
@@ -130,6 +174,9 @@ export function createApp() {
   // Required for express-rate-limit to read the real client IP from X-Forwarded-For
   app.set('trust proxy', 1)
 
+  // CSRF Protection
+  const csrf = createCsrfMiddleware()
+
   // Rate limiting - auth endpoints
   const authRateLimit = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -196,11 +243,14 @@ export function createApp() {
 
   app.use(generalRateLimit)
 
-  app.get('/api/auth/session', (req, res) => {
-    res.json({ authenticated: isAuthenticated(req) })
+  app.get('/api/auth/session', csrf.generateToken, (req, res) => {
+    res.json({
+      authenticated: isAuthenticated(req),
+      csrfToken: res.locals.csrfToken
+    })
   })
 
-  app.post('/api/auth/login', authRateLimit, (req, res) => {
+  app.post('/api/auth/login', authRateLimit, async (req, res) => {
     const { username, password } = req.body
 
     if (!username || !password || typeof username !== 'string' || typeof password !== 'string') {
@@ -208,7 +258,7 @@ export function createApp() {
       return
     }
 
-    if (username !== adminUsername || password !== adminPassword) {
+    if (username !== adminUsername || !await bcrypt.compare(password, hashedAdminPassword)) {
       console.warn(`[AUTH] Failed login attempt — IP: ${req.ip}, username: ${username}`)
       res.status(401).json({ message: 'Username atau password salah.' })
       return
@@ -247,63 +297,14 @@ export function createApp() {
     res.json(await getSchema())
   })
 
-  app.put('/api/schema', requireAdmin, async (req, res) => {
+  app.put('/api/schema', requireAdmin, csrf.validateToken, async (req, res) => {
     if (!ensureStorageInVercel(res)) return
 
     // Validate schema data
-    if (!req.body || typeof req.body !== 'object') {
-      return res.status(400).json({ message: 'Schema harus berupa objek.' })
-    }
-
-    const requiredFields = ['eventName', 'tagline', 'description', 'location', 'date', 'poster', 'fields']
-    for (const field of requiredFields) {
-      if (!(field in req.body)) {
-        return res.status(400).json({ message: `Field ${field} wajib ada dalam schema.` })
-      }
-    }
-
-    // Validate event metadata
-    const stringFields = ['eventName', 'tagline', 'description', 'location', 'date', 'poster']
-    for (const field of stringFields) {
-      if (typeof req.body[field] !== 'string') {
-        return res.status(400).json({ message: `Field ${field} harus berupa string.` })
-      }
-    }
-
-    // Validate fields array
-    if (!Array.isArray(req.body.fields)) {
-      return res.status(400).json({ message: 'Field fields harus berupa array.' })
-    }
-
-    const fieldIds = new Set()
-    for (let i = 0; i < req.body.fields.length; i++) {
-      const field = req.body.fields[i]
-      if (!field || typeof field !== 'object') {
-        return res.status(400).json({ message: `Field pada index ${i} tidak valid.` })
-      }
-
-      const requiredFieldProps = ['id', 'label', 'type', 'required', 'placeholder', 'options']
-      for (const prop of requiredFieldProps) {
-        if (!(prop in field)) {
-          return res.status(400).json({ message: `Field pada index ${i} kehilangan property ${prop}.` })
-        }
-      }
-
-      // Check for duplicate IDs
-      if (fieldIds.has(field.id)) {
-        return res.status(400).json({ message: `Field ID '${field.id}' duplikat.` })
-      }
-      fieldIds.add(field.id)
-
-      // Validate field types
-      const validTypes = ['text', 'email', 'tel', 'number', 'select', 'textarea', 'date', 'checkbox']
-      if (!validTypes.includes(field.type)) {
-        return res.status(400).json({ message: `Tipe field '${field.type}' tidak valid.` })
-      }
-
-      if (typeof field.required !== 'boolean') {
-        return res.status(400).json({ message: `Field required harus berupa boolean.` })
-      }
+    try {
+      validateEventSchema(req.body)
+    } catch (error) {
+      return res.status(400).json({ message: error.message })
     }
 
     const saved = await saveSchema(req.body)
@@ -314,7 +315,7 @@ export function createApp() {
     res.json(await getSubmissions())
   })
 
-  app.delete('/api/submissions/:id', requireAdmin, async (req, res) => {
+  app.delete('/api/submissions/:id', requireAdmin, csrf.validateToken, async (req, res) => {
     if (!ensureStorageInVercel(res)) return
     const deleted = await deleteSubmission(req.params.id)
 
@@ -330,26 +331,10 @@ export function createApp() {
     if (!ensureStorageInVercel(res)) return
 
     // Validate submission data
-    if (!req.body || typeof req.body !== 'object') {
-      return res.status(400).json({ message: 'Request body harus berupa objek.' })
-    }
-
-    if (!Array.isArray(req.body.answers)) {
-      return res.status(400).json({ message: 'Field answers harus berupa array.' })
-    }
-
-    // Validate each answer
-    for (let i = 0; i < req.body.answers.length; i++) {
-      const answer = req.body.answers[i]
-      if (!answer || typeof answer !== 'object') {
-        return res.status(400).json({ message: `Answer pada index ${i} tidak valid.` })
-      }
-      if (!answer.label || typeof answer.label !== 'string') {
-        return res.status(400).json({ message: `Label pada answer index ${i} tidak valid.` })
-      }
-      if (answer.value !== undefined && typeof answer.value !== 'string' && typeof answer.value !== 'boolean') {
-        return res.status(400).json({ message: `Value pada answer index ${i} harus string atau boolean.` })
-      }
+    try {
+      validateSubmission(req.body)
+    } catch (error) {
+      return res.status(400).json({ message: error.message })
     }
 
     const now = new Date()
@@ -363,7 +348,7 @@ export function createApp() {
     res.status(201).json(await addSubmission(submission))
   })
 
-  app.post('/api/upload-poster', requireAdmin, upload.single('poster'), async (req, res) => {
+  app.post('/api/upload-poster', requireAdmin, csrf.validateToken, upload.single('poster'), async (req, res) => {
     if (!req.file) {
       res.status(400).json({ message: 'File poster tidak ditemukan.' })
       return
@@ -378,9 +363,12 @@ export function createApp() {
       return
     }
 
-    // Sanitize filename
+    // Sanitize filename and prevent path traversal
     const sanitizeFilename = (filename) => {
-      return filename
+      // Prevent path traversal by using only the basename
+      const baseName = path.basename(filename)
+
+      return baseName
         .replace(/[^a-zA-Z0-9.-]/g, '-') // Replace special chars with dash
         .replace(/-+/g, '-') // Replace multiple dashes with single dash
         .replace(/^-|-$/g, '') // Remove leading/trailing dashes
@@ -414,7 +402,7 @@ export function createApp() {
     res.status(201).json({ posterUrl: `/uploads/${safeName}` })
   })
 
-  app.post('/api/reset', requireAdmin, async (_req, res) => {
+  app.post('/api/reset', requireAdmin, csrf.validateToken, async (_req, res) => {
     if (!ensureStorageInVercel(res)) return
     res.json(await resetDb())
   })
@@ -476,15 +464,35 @@ export function createApp() {
   return app
 }
 
+// Initialize admin password — hash synchronously so it's ready before any request
+let hashedAdminPassword = null
+if (adminPassword) {
+  // Check if password is already hashed (bcrypt hashes start with $2a$, $2b$, or $2y$)
+  if (adminPassword.startsWith('$2a$') || adminPassword.startsWith('$2b$') || adminPassword.startsWith('$2y$')) {
+    hashedAdminPassword = adminPassword
+  } else {
+    // Hash plain text password synchronously so it works in both local and Vercel
+    const saltRounds = 12
+    hashedAdminPassword = bcrypt.hashSync(adminPassword, saltRounds)
+    console.warn('⚠️  Plain text admin password detected. Consider storing a pre-hashed password in .env.')
+  }
+}
+
+// Create app synchronously (required for Vercel)
 const app = createApp()
 
-if (!isVercelRuntime) {
+// Start the server (only for local development)
+function startServer() {
   app.listen(port, () => {
     console.log(`API server running on http://localhost:${port}`)
     console.log(`Storage mode: ${getStorageMode()}`)
     console.log(`Admin username: ${adminUsername}`)
     console.log('Admin password loaded from environment configuration.')
   })
+}
+
+if (!isVercelRuntime) {
+  startServer()
 }
 
 export default app

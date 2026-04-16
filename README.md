@@ -14,14 +14,14 @@ Webapp pendaftaran peserta event dengan landing page publik dan admin dashboard 
   - export data peserta ke CSV
   - search, filter, sorting, pagination, dan analytics ringan
 - Login admin sederhana berbasis session cookie
-- Storage fleksibel: file lokal atau Google Drive
+- Storage fleksibel: file lokal atau Supabase + Cloudflare R2
 
 ## Tech Stack
 
 - Frontend: Vite + React + Tailwind CSS v4
 - Backend: Express
 - Upload file: Multer
-- Storage: JSON file lokal atau Google Drive API
+- Storage: JSON file lokal atau Supabase + Cloudflare R2
 
 ## Menjalankan Project
 
@@ -59,69 +59,86 @@ npm run dev -- --host 0.0.0.0
 - `SESSION_SECRET`: secret untuk generate session token
 - `COOKIE_SECURE`: set `true` jika deploy dengan HTTPS penuh
 - `VITE_API_BASE_URL`: base URL backend untuk frontend production. Kosongkan saat local dev dengan proxy Vite.
-- `GOOGLE_DRIVE_FOLDER_ID`: folder tujuan di Google Drive personal
-- `GOOGLE_OAUTH_CLIENT_ID`: client ID OAuth Google
-- `GOOGLE_OAUTH_CLIENT_SECRET`: client secret OAuth Google
-- `GOOGLE_OAUTH_REFRESH_TOKEN`: refresh token OAuth akun Google personal
-- `GOOGLE_OAUTH_REDIRECT_URI`: redirect URI OAuth, default `http://localhost:3001/oauth2callback`
+- `SUPABASE_URL`: URL Supabase project
+- `SUPABASE_SERVICE_ROLE_KEY`: service role key Supabase
+- `R2_ACCOUNT_ID`: Cloudflare Account ID (untuk upload poster)
+- `R2_ACCESS_KEY_ID`: R2 access key ID (untuk upload poster)
+- `R2_SECRET_ACCESS_KEY`: R2 secret access key (untuk upload poster)
+- `R2_BUCKET_NAME`: nama R2 bucket (untuk upload poster)
+- `R2_PUBLIC_URL`: public URL R2 bucket (untuk upload poster)
 
 ## Mode Storage
 
 ### 1. File lokal
 
-Jika env Google Drive belum diisi, app otomatis memakai file lokal di `data/db.json` dan upload poster ke `public/uploads`.
+Jika env Supabase belum diisi, app otomatis memakai file lokal di `data/db.json` dan upload poster ke `public/uploads`.
 
-### 2. Google Drive
+### 2. Supabase + Cloudflare R2
 
-App otomatis memakai Google Drive jika env berikut diisi:
+App otomatis memakai Supabase + Cloudflare R2 jika env berikut diisi:
 
-- `GOOGLE_DRIVE_FOLDER_ID`
-- `GOOGLE_OAUTH_CLIENT_ID`
-- `GOOGLE_OAUTH_CLIENT_SECRET`
-- `GOOGLE_OAUTH_REFRESH_TOKEN`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `R2_ACCOUNT_ID` (opsional, untuk upload poster)
+- `R2_ACCESS_KEY_ID` (opsional, untuk upload poster)
+- `R2_SECRET_ACCESS_KEY` (opsional, untuk upload poster)
+- `R2_BUCKET_NAME` (opsional, untuk upload poster)
+- `R2_PUBLIC_URL` (opsional, untuk upload poster)
 
-Yang disimpan ke Drive:
+Yang disimpan ke Supabase:
 
-- database JSON pendaftaran (`event-registration-db.json`)
-- file poster upload baru
+- database JSON pendaftaran (tabel `event_schema` dan `submissions`)
 
-## Setup Google Drive
+Yang diupload ke Cloudflare R2:
 
-1. Buat Google Cloud project
-2. Aktifkan Google Drive API
-3. Buat OAuth Client ID untuk aplikasi desktop atau web
-4. Ambil:
-   - `client_id`
-   - `client_secret`
-5. Jalankan flow OAuth untuk mendapatkan `refresh_token` akun Google personal yang akan dipakai aplikasi
-6. Buat atau pilih folder di Google Drive personal
-7. Isi `GOOGLE_DRIVE_FOLDER_ID` dengan ID folder target
-8. Isi `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, dan `GOOGLE_OAUTH_REFRESH_TOKEN` di `.env`
+- file poster event
 
-### Mengambil refresh token dengan helper script
+## Setup Supabase
 
-1. Isi dulu `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, dan `GOOGLE_OAUTH_REDIRECT_URI` di `.env`
-2. Generate authorization URL:
+1. Buat project baru di [Supabase](https://supabase.com)
+2. Pergi ke Settings > API untuk mendapatkan:
+    - `SUPABASE_URL`
+    - `SUPABASE_SERVICE_ROLE_KEY`
+3. Buat tabel database dengan SQL berikut:
 
-```bash
-node scripts/google-oauth.js auth-url
+```sql
+-- Tabel untuk schema event
+CREATE TABLE event_schema (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  event_name TEXT NOT NULL,
+  tagline TEXT NOT NULL,
+  description TEXT NOT NULL,
+  location TEXT NOT NULL,
+  date TEXT NOT NULL,
+  poster TEXT NOT NULL,
+  fields JSONB NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Tabel untuk submissions
+CREATE TABLE submissions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  submitted_at TEXT NOT NULL,
+  submitted_at_iso TEXT NOT NULL,
+  answers JSONB NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Row-Level Security (RLS) - disable untuk service role
+ALTER TABLE event_schema DISABLE ROW LEVEL SECURITY;
+ALTER TABLE submissions DISABLE ROW LEVEL SECURITY;
 ```
 
-3. Buka URL yang keluar di browser, login dengan akun Google personal target, lalu approve akses Drive
-4. Ambil `code` dari redirect/callback URL
-5. Tukar code menjadi tokens:
+## Setup Cloudflare R2 (Opsional)
 
-```bash
-node scripts/google-oauth.js exchange-code --code="PASTE_AUTH_CODE_HERE"
-```
-
-6. Ambil `refresh_token` dari output JSON, lalu simpan ke `.env` sebagai `GOOGLE_OAUTH_REFRESH_TOKEN`
-
-Catatan penting:
-
-- Integrasi write ke Google Drive personal **tidak** memakai service account
-- Service account bisa gagal untuk write karena tidak punya storage quota pada Google Drive personal
-- Refresh token OAuth harus dianggap sebagai secret dan tidak boleh di-commit
+1. Buat R2 bucket di [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. Pergi ke R2 > [bucket Anda] > Settings > Tokens untuk mendapatkan:
+    - `R2_ACCESS_KEY_ID`
+    - `R2_SECRET_ACCESS_KEY`
+3. Set `R2_ACCOUNT_ID` dengan Cloudflare Account ID Anda
+4. Set `R2_BUCKET_NAME` dengan nama bucket
+5. Set `R2_PUBLIC_URL` dengan public URL bucket (misalnya `https://[bucket].r2.cloudflarestorage.com`)
 
 ## Catatan Deploy
 
@@ -129,7 +146,7 @@ Catatan penting:
 - Set `COOKIE_SECURE=true` bila menggunakan HTTPS
 - Session admin masih in-memory; semua admin akan logout saat server restart
 - Untuk production penuh, langkah berikutnya adalah session store terpisah dan database nyata
-- Untuk storage Google Drive personal, simpan semua credential OAuth hanya di server-side environment variables
+- Untuk storage Supabase + R2, simpan semua credential hanya di server-side environment variables
 - Frontend Vite bisa dideploy ke Vercel, tetapi backend Express saat ini tetap perlu dijalankan sebagai service terpisah atau dimigrasikan ke platform/serverless yang sesuai
 - Saat frontend dideploy terpisah, isi `VITE_API_BASE_URL` dengan origin backend production, misalnya `https://api-domain-anda.example.com`
 - Jangan commit `.env` atau file credential JSON ke repository
@@ -144,7 +161,7 @@ VITE_API_BASE_URL=https://backend-anda.example.com
 ```
 
 3. Pastikan backend mengizinkan origin frontend production bila CORS diperketat nanti
-4. Simpan secret backend (`GOOGLE_OAUTH_*`, `GOOGLE_DRIVE_FOLDER_ID`, `SESSION_SECRET`, dll.) hanya di environment backend, bukan di frontend Vercel
+4. Simpan secret backend (`SUPABASE_*`, `R2_*`, `SESSION_SECRET`, dll.) hanya di environment backend, bukan di frontend Vercel
 
 ## Deploy Full App ke Vercel
 
@@ -153,7 +170,7 @@ Project ini sekarang mendukung backend Express dalam shape yang kompatibel untuk
 Catatan penting:
 
 - admin auth memakai signed stateless cookie, bukan session in-memory,
-- storage production di Vercel mengandalkan Google Drive OAuth,
+- storage production di Vercel mengandalkan Supabase + Cloudflare R2,
 - fallback local-file/local-upload tidak boleh dijadikan mode production di Vercel.
 
 Environment variables yang perlu tersedia untuk runtime backend Vercel:
@@ -163,11 +180,13 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=ubah-ke-password-aman
 SESSION_SECRET=ubah-ke-random-string-panjang
 COOKIE_SECURE=true
-GOOGLE_DRIVE_FOLDER_ID=...
-GOOGLE_OAUTH_CLIENT_ID=...
-GOOGLE_OAUTH_CLIENT_SECRET=...
-GOOGLE_OAUTH_REFRESH_TOKEN=...
-GOOGLE_OAUTH_REDIRECT_URI=http://localhost:3001/oauth2callback
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
+R2_ACCOUNT_ID=...
+R2_ACCESS_KEY_ID=...
+R2_SECRET_ACCESS_KEY=...
+R2_BUCKET_NAME=...
+R2_PUBLIC_URL=...
 ```
 
 Jika frontend dan backend sama-sama ada di Vercel project ini, `VITE_API_BASE_URL` dapat dibiarkan kosong agar frontend memakai same-origin `/api/*`.

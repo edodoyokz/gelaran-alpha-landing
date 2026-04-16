@@ -1,5 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './index.css'
+import { logError } from './errorTracker.js'
+
+// Custom hook for debouncing values
+function useDebounce(value, delay) {
+  const [debouncedValue, setDebouncedValue] = useState(value)
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value)
+    }, delay)
+
+    return () => {
+      clearTimeout(handler)
+    }
+  }, [value, delay])
+
+  return debouncedValue
+}
 
 const defaultSchema = {
   eventName: 'Gelaran Heritage Fest 2026',
@@ -46,6 +64,9 @@ const submissionSorts = [
 ]
 
 const apiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+
+// Store CSRF token
+let csrfToken = null
 
 function formatOptions(options = '') {
   return options
@@ -95,15 +116,24 @@ function formatSubmissionDate(submission) {
 
 async function apiFetch(path, options = {}) {
   const isFormData = options.body instanceof FormData
+  const isStateChanging = ['POST', 'PUT', 'DELETE'].includes(options.method || 'GET')
+
+  const headers = isFormData
+    ? options.headers || {}
+    : {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      }
+
+  // Add CSRF token for state-changing requests
+  if (isStateChanging && csrfToken) {
+    headers['X-CSRF-Token'] = csrfToken
+  }
+
   const response = await fetch(apiUrl(path), {
     credentials: 'include',
     ...options,
-    headers: isFormData
-      ? options.headers
-      : {
-          'Content-Type': 'application/json',
-          ...(options.headers || {}),
-        },
+    headers,
   })
 
   return response
@@ -132,32 +162,53 @@ function App() {
   const fileInputRef = useRef(null)
   const pageSize = 5
 
+  const checkSession = useCallback(async (signal) => {
+    try {
+      const response = await apiFetch('/api/auth/session')
+      if (signal?.aborted) return
+
+      const data = await response.json()
+      if (signal?.aborted) return
+
+      setIsAdminAuthenticated(data.authenticated)
+      if (data.csrfToken) {
+        csrfToken = data.csrfToken
+      }
+    } catch (err) {
+      if (!signal?.aborted) {
+        logError(err, { context: 'checkSession' })
+        setIsAdminAuthenticated(false)
+      }
+    }
+  }, [])
+
   useEffect(() => {
+    const controller = new AbortController()
+
     async function loadPublicData() {
       try {
-        const schemaResponse = await fetch(apiUrl('/api/schema'))
+        const schemaResponse = await fetch(apiUrl('/api/schema'), {
+          signal: controller.signal
+        })
         const schemaData = await schemaResponse.json()
         setSchema(schemaData)
-      } catch {
-        setMessage('Gagal memuat data event dari server.')
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          logError(err, { context: 'loadPublicData', url: apiUrl('/api/schema') })
+          setMessage('Gagal memuat data event dari server.')
+        }
       } finally {
         setLoading(false)
       }
     }
 
-    async function checkSession() {
-      try {
-        const response = await apiFetch('/api/auth/session')
-        const data = await response.json()
-        setIsAdminAuthenticated(data.authenticated)
-      } catch {
-        setIsAdminAuthenticated(false)
-      }
-    }
-
     loadPublicData()
-    checkSession()
-  }, [])
+    checkSession(controller.signal)
+
+    return () => {
+      controller.abort()
+    }
+  }, [checkSession])
 
   const loadAdminData = useCallback(async () => {
     setSubmissionsLoading(true)
@@ -180,15 +231,18 @@ function App() {
 
       setSchema(schemaData)
       setSubmissions(submissionsData)
-    } catch {
+    } catch (err) {
+      logError(err, { context: 'loadAdminData' })
       setMessage('Gagal memuat data admin dari server.')
     } finally {
       setSubmissionsLoading(false)
     }
   }, [])
 
+  const debouncedSubmissionQuery = useDebounce(submissionQuery, 300)
+
   const filteredSubmissions = useMemo(() => {
-    const normalizedQuery = submissionQuery.trim().toLowerCase()
+    const normalizedQuery = debouncedSubmissionQuery.trim().toLowerCase()
     const todayIso = new Date().toISOString().slice(0, 10)
 
     const filtered = submissions.filter((submission) => {
@@ -216,7 +270,7 @@ function App() {
       if (submissionSort === 'nameDesc') return getPrimaryAnswer(right).localeCompare(getPrimaryAnswer(left), 'id')
       return getSubmissionTimeValue(right) - getSubmissionTimeValue(left)
     })
-  }, [submissionFilter, submissionQuery, submissionSort, submissions])
+  }, [submissionFilter, debouncedSubmissionQuery, submissionSort, submissions])
 
   useEffect(() => {
     if (activeView === 'admin' && isAdminAuthenticated) {
@@ -230,7 +284,7 @@ function App() {
     if (currentPage > maxPages) {
       setCurrentPage(1)
     }
-  }, [submissionQuery, submissionFilter, submissionSort, filteredSubmissions.length, pageSize, currentPage])
+  }, [debouncedSubmissionQuery, submissionFilter, submissionSort, filteredSubmissions.length, pageSize, currentPage])
 
   const analytics = useMemo(() => {
     const selectField = schema.fields.find((field) => field.type === 'select')
@@ -479,7 +533,7 @@ function App() {
 
   function exportCsv() {
     const params = new URLSearchParams({
-      query: submissionQuery,
+      query: debouncedSubmissionQuery,
       filter: submissionFilter,
       sort: submissionSort,
     })
@@ -506,6 +560,8 @@ function App() {
 
       setIsAdminAuthenticated(data.authenticated)
       setMessage('Login admin berhasil.')
+      // Refresh session to get CSRF token
+      await checkSession()
       await loadAdminData()
     } catch {
       setLoginError('Tidak dapat terhubung ke server auth.')
