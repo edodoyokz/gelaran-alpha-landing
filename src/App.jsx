@@ -157,6 +157,7 @@ function App() {
   const [formData, setFormData] = useState({})
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
+  const [formLoadedAt] = useState(() => Date.now())
    const [saving, setSaving] = useState(false)
    const [uploadingPoster, setUploadingPoster] = useState(false)
    const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false)
@@ -524,7 +525,11 @@ function App() {
     try {
       const response = await apiFetch('/api/submissions', {
         method: 'POST',
-        body: JSON.stringify(newEntry),
+        body: JSON.stringify({
+          ...newEntry,
+          website: formData._honeypot || '',
+          _formLoadedAt: formLoadedAt,
+        }),
       })
       const savedEntry = await response.json()
       setSubmissions((current) => [savedEntry, ...current])
@@ -745,6 +750,21 @@ function App() {
               </div>
 
               <form className="registration-form" onSubmit={handleSubmit}>
+                {/* Anti-bot honeypot field */}
+                <div style={{ position: 'absolute', left: '-9999px', opacity: 0, height: 0, overflow: 'hidden' }} aria-hidden="true" tabIndex={-1}>
+                  <label>
+                    <span>Website</span>
+                    <input
+                      type="text"
+                      name="website"
+                      value={formData._honeypot || ''}
+                      onChange={(e) => handleFormValue('_honeypot', e.target.value, 'text')}
+                      autoComplete="off"
+                      tabIndex={-1}
+                    />
+                  </label>
+                </div>
+
                 {schema.fields.map((field) => {
                   const options = formatOptions(field.options)
                   const value = formData[field.id] ?? (field.type === 'checkbox' ? false : '')

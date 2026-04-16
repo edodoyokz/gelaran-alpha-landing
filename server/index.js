@@ -200,6 +200,15 @@ export function createApp() {
     skip: (req) => req.path === '/api/health',
   })
 
+  // Rate limiting - submissions (anti-bot)
+  const submissionRateLimit = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 menit
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Terlalu banyak pendaftaran. Coba lagi dalam 15 menit.' },
+  })
+
   // CORS configuration - more restrictive for production
   const corsOptions = {
     origin: function (origin, callback) {
@@ -327,8 +336,26 @@ export function createApp() {
     res.json({ success: true })
   })
 
-  app.post('/api/submissions', async (req, res) => {
+  app.post('/api/submissions', submissionRateLimit, async (req, res) => {
     if (!ensureStorageInVercel(res)) return
+
+    // Anti-bot: honeypot check
+    if (req.body.website) {
+      return res.status(400).json({ message: 'Pendaftaran tidak valid.' })
+    }
+
+    // Anti-bot: time-based validation
+    const formLoadedAt = Number(req.body._formLoadedAt)
+    if (!formLoadedAt || isNaN(formLoadedAt)) {
+      return res.status(400).json({ message: 'Pendaftaran tidak valid.' })
+    }
+    const elapsed = Date.now() - formLoadedAt
+    if (elapsed < 3000) {
+      return res.status(400).json({ message: 'Pendaftaran tidak valid.' })
+    }
+    if (elapsed > 2 * 60 * 60 * 1000) {
+      return res.status(400).json({ message: 'Form sudah kadaluarsa. Silakan muat ulang halaman.' })
+    }
 
     // Validate submission data
     try {
