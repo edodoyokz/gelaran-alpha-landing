@@ -17,7 +17,8 @@ import {
   resetDb,
   saveSchema,
 } from './store.js'
-import { isDriveStorageEnabled, uploadDriveFile } from './driveStorage.js'
+import { isR2StorageEnabled, uploadR2File } from './r2Storage.js'
+import { isSupabaseEnabled } from './supabaseStorage.js'
 
 const port = process.env.PORT || 3001
 const uploadsDir = path.resolve('public/uploads')
@@ -111,10 +112,10 @@ function filterSubmissions(submissions, query, filter) {
   })
 }
 
-function ensureDriveStorageInVercel(res) {
-  if (isVercelRuntime && !isDriveStorageEnabled()) {
+function ensureStorageInVercel(res) {
+  if (isVercelRuntime && !isSupabaseEnabled()) {
     res.status(500).json({
-      message: 'Google Drive OAuth storage wajib aktif saat berjalan di Vercel.',
+      message: 'Supabase storage wajib aktif saat berjalan di Vercel.',
     })
     return false
   }
@@ -243,7 +244,7 @@ export function createApp() {
   })
 
   app.put('/api/schema', requireAdmin, async (req, res) => {
-    if (!ensureDriveStorageInVercel(res)) return
+    if (!ensureStorageInVercel(res)) return
 
     // Validate schema data
     if (!req.body || typeof req.body !== 'object') {
@@ -310,7 +311,7 @@ export function createApp() {
   })
 
   app.delete('/api/submissions/:id', requireAdmin, async (req, res) => {
-    if (!ensureDriveStorageInVercel(res)) return
+    if (!ensureStorageInVercel(res)) return
     const deleted = await deleteSubmission(req.params.id)
 
     if (!deleted) {
@@ -322,7 +323,7 @@ export function createApp() {
   })
 
   app.post('/api/submissions', async (req, res) => {
-    if (!ensureDriveStorageInVercel(res)) return
+    if (!ensureStorageInVercel(res)) return
 
     // Validate submission data
     if (!req.body || typeof req.body !== 'object') {
@@ -364,7 +365,7 @@ export function createApp() {
       return
     }
 
-    if (!ensureDriveStorageInVercel(res)) return
+    if (!ensureStorageInVercel(res)) return
 
     // Additional validation
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
@@ -382,16 +383,16 @@ export function createApp() {
         .toLowerCase()
     }
 
-    if (isDriveStorageEnabled()) {
+    if (isR2StorageEnabled()) {
       const safeName = `${Date.now()}-${sanitizeFilename(req.file.originalname)}`
-      const posterUrl = await uploadDriveFile({
+      const posterUrl = await uploadR2File({
         fileName: safeName,
         mimeType: req.file.mimetype,
         buffer: req.file.buffer,
       })
 
       if (!posterUrl) {
-        res.status(500).json({ message: 'Upload ke Google Drive gagal.' })
+        res.status(500).json({ message: 'Upload ke Cloudflare R2 gagal.' })
         return
       }
 
@@ -410,7 +411,7 @@ export function createApp() {
   })
 
   app.post('/api/reset', requireAdmin, async (_req, res) => {
-    if (!ensureDriveStorageInVercel(res)) return
+    if (!ensureStorageInVercel(res)) return
     res.json(await resetDb())
   })
 

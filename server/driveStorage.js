@@ -1,3 +1,4 @@
+// DEPRECATED: This file is no longer used. Storage has been migrated to Supabase + Cloudflare R2.
 import { Readable } from 'node:stream'
 import { google } from 'googleapis'
 

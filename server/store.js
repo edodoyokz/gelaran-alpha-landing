@@ -2,10 +2,14 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { defaultSchema } from './defaultSchema.js'
 import {
-  isDriveStorageEnabled,
-  readDriveJson,
-  writeDriveJson,
-} from './driveStorage.js'
+  isSupabaseEnabled,
+  getSupabaseSchema,
+  saveSupabaseSchema,
+  getSupabaseSubmissions,
+  addSupabaseSubmission,
+  deleteSupabaseSubmission,
+  resetSupabaseDb,
+} from './supabaseStorage.js'
 
 const dataDir = path.resolve('data')
 const dbPath = path.join(dataDir, 'db.json')
@@ -25,78 +29,81 @@ function ensureLocalDb() {
   }
 }
 
-async function readDb() {
-  if (isDriveStorageEnabled()) {
-    return readDriveJson(getInitialData())
-  }
-
+function readLocalDb() {
   ensureLocalDb()
   return JSON.parse(fs.readFileSync(dbPath, 'utf-8'))
 }
 
-async function writeDb(data) {
-  if (isDriveStorageEnabled()) {
-    await writeDriveJson(data)
-    return
-  }
-
+function writeLocalDb(data) {
   ensureLocalDb()
   fs.writeFileSync(dbPath, JSON.stringify(data, null, 2))
 }
 
-// Migrates deprecated drive.google.com/uc?id= poster URLs to the
-// thumbnail API format which is reliably served as an image in all browsers.
-function migratePosterUrl(schema) {
-  if (!schema?.poster) return schema
-  const match = schema.poster.match(/drive\.google\.com\/uc\?(?:.*&)?id=([^&]+)/)
-  if (match) {
-    return { ...schema, poster: `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1200` }
-  }
-  return schema
-}
-
 export async function getSchema() {
-  const schema = (await readDb()).schema
-  return migratePosterUrl(schema)
+  if (isSupabaseEnabled()) {
+    return getSupabaseSchema(defaultSchema)
+  }
+
+  return readLocalDb().schema
 }
 
 export async function saveSchema(schema) {
-  const data = await readDb()
+  if (isSupabaseEnabled()) {
+    return saveSupabaseSchema(schema)
+  }
+
+  const data = readLocalDb()
   data.schema = schema
-  await writeDb(data)
+  writeLocalDb(data)
   return data.schema
 }
 
 export async function getSubmissions() {
-  return (await readDb()).submissions
+  if (isSupabaseEnabled()) {
+    return getSupabaseSubmissions()
+  }
+
+  return readLocalDb().submissions
 }
 
 export async function addSubmission(submission) {
-  const data = await readDb()
+  if (isSupabaseEnabled()) {
+    return addSupabaseSubmission(submission)
+  }
+
+  const data = readLocalDb()
   data.submissions.unshift(submission)
-  await writeDb(data)
+  writeLocalDb(data)
   return submission
 }
 
 export async function deleteSubmission(submissionId) {
-  const data = await readDb()
+  if (isSupabaseEnabled()) {
+    return deleteSupabaseSubmission(submissionId)
+  }
+
+  const data = readLocalDb()
   const nextSubmissions = data.submissions.filter(
     (submission) => submission.id !== submissionId,
   )
 
   const deleted = nextSubmissions.length !== data.submissions.length
   data.submissions = nextSubmissions
-  await writeDb(data)
+  writeLocalDb(data)
 
   return deleted
 }
 
 export async function resetDb() {
+  if (isSupabaseEnabled()) {
+    return resetSupabaseDb(getInitialData())
+  }
+
   const data = getInitialData()
-  await writeDb(data)
+  writeLocalDb(data)
   return data
 }
 
 export function getStorageMode() {
-  return isDriveStorageEnabled() ? 'google-drive' : 'local-file'
+  return isSupabaseEnabled() ? 'supabase' : 'local-file'
 }
