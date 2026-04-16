@@ -27,6 +27,16 @@ const defaultSchema = {
   location: 'Solo, Indonesia',
   date: '24 - 26 Agustus 2026',
   poster: '/design-reference.png',
+  highlights: [
+    { label: 'Kategori Lari', value: '5K, 10K, HM, FM' },
+    { label: 'Total Hadiah', value: 'Rp 200 Juta' },
+    { label: 'Benefit Eksklusif', value: 'Jersey & Medali' },
+  ],
+  features: [
+    { title: 'Lintasan Steril & Aman', description: 'Rute lari di jantung kota dengan pengawalan penuh dan water station di setiap 2.5km.' },
+    { title: 'Timing System Akurat', description: 'Sistem pencatatan waktu real-time menggunakan teknologi chip untuk akurasi maksimal.' },
+    { title: 'Race Kit & Medali', description: 'Jersey drifit premium, nomor BIB, dan medali finisher eksklusif untuk setiap peserta.' },
+  ],
   fields: [
     {
       id: 'full-name',
@@ -722,7 +732,7 @@ function App() {
               </div>
               <p>{schema.description}</p>
               <ul className="feature-list">
-                {((schema.features && Array.isArray(schema.features) && schema.features.length > 0) ? schema.features : defaultSchema.features).map((feature, index) => (
+                {((Array.isArray(schema.features) && schema.features.length > 0) ? schema.features : defaultSchema.features).map((feature, index) => (
                   <li key={index}><strong>{feature.title}</strong>: {feature.description}</li>
                 ))}
               </ul>
