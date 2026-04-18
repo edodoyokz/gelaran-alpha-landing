@@ -153,6 +153,18 @@ function App() {
   const [activeView, setActiveView] = useState('public')
   const [adminTab, setAdminTab] = useState('settings')
   const [schema, setSchema] = useState(defaultSchema)
+  
+  // Helper function to safely merge fetched schema with defaults
+  const safeSetSchema = useCallback((fetchedSchema) => {
+    const merged = {
+      ...defaultSchema,
+      ...fetchedSchema,
+      fields: Array.isArray(fetchedSchema?.fields) ? fetchedSchema.fields : defaultSchema.fields,
+      highlights: Array.isArray(fetchedSchema?.highlights) ? fetchedSchema.highlights : defaultSchema.highlights,
+      features: Array.isArray(fetchedSchema?.features) ? fetchedSchema.features : defaultSchema.features,
+    }
+    setSchema(merged)
+  }, [])
   const [submissions, setSubmissions] = useState([])
   const [formData, setFormData] = useState({})
   const [message, setMessage] = useState('')
@@ -206,7 +218,7 @@ function App() {
           signal: controller.signal
         })
         const schemaData = await schemaResponse.json()
-        setSchema(schemaData)
+        safeSetSchema(schemaData)
       } catch (err) {
         if (err.name !== 'AbortError') {
           logError(err, { context: 'loadPublicData', url: apiUrl('/api/schema') })
@@ -246,7 +258,7 @@ function App() {
         emailConfigResponse.json(),
       ])
 
-      setSchema(schemaData)
+      safeSetSchema(schemaData)
       setSubmissions(submissionsData)
       setEmailConfig(emailConfigData)
     } catch (err) {
@@ -305,6 +317,13 @@ function App() {
   }, [debouncedSubmissionQuery, submissionFilter, submissionSort, filteredSubmissions.length, pageSize, currentPage])
 
   const analytics = useMemo(() => {
+    if (!schema || !schema.fields || !Array.isArray(schema.fields)) {
+      return {
+        title: 'Belum ada field dropdown',
+        breakdown: [],
+      }
+    }
+
     const selectField = schema.fields.find((field) => field.type === 'select')
 
     if (!selectField) {
@@ -360,7 +379,7 @@ function App() {
       }
 
       const savedSchema = await response.json()
-      setSchema(savedSchema)
+      safeSetSchema(savedSchema)
       setMessage('Perubahan event berhasil disimpan ke server.')
     } catch {
       setMessage('Gagal menyimpan perubahan ke server.')
@@ -505,6 +524,11 @@ function App() {
     event.preventDefault()
     setMessage('')
 
+    if (!schema || !schema.fields || !Array.isArray(schema.fields)) {
+      setMessage('Error: Schema tidak valid. Silakan refresh halaman.')
+      return
+    }
+
     const missingField = schema.fields.find((field) => {
       if (!field.required) return false
       const value = formData[field.id]
@@ -561,7 +585,7 @@ function App() {
         return
       }
       const data = await response.json()
-      setSchema(data.schema)
+      safeSetSchema(data.schema)
       setSubmissions(data.submissions)
       setFormData({})
       setSubmissionQuery('')
@@ -699,7 +723,7 @@ function App() {
         method: 'POST',
         body: JSON.stringify({
           recipient: testEmailRecipient,
-          type: testEmailType,
+          emailType: testEmailType,
         }),
       })
 
@@ -711,10 +735,13 @@ function App() {
 
       const result = await response.json()
       
-      if (result.error) {
-        setMessage(`Gagal mengirim test email: ${result.message || 'Unknown error'}`)
-      } else if (result.skipped) {
-        setMessage(`Test email tidak dikirim: ${result.reason}`)
+      // Check nested result structure (backend wraps response as { success: true, result })
+      const emailResult = result.result || result
+      
+      if (emailResult.error) {
+        setMessage(`Gagal mengirim test email: ${emailResult.message || 'Unknown error'}`)
+      } else if (emailResult.skipped) {
+        setMessage(`Test email tidak dikirim: ${emailResult.reason}`)
       } else {
         setMessage('Test email berhasil dikirim! Cek inbox Anda.')
       }
@@ -1057,7 +1084,7 @@ function App() {
                   </div>
 
                   <div className="builder-list">
-                    {schema.highlights.map((highlight, index) => (
+                    {(schema.highlights || []).map((highlight, index) => (
                       <section key={index} className="builder-item">
                         <div className="builder-item-head">
                           <strong>Highlight {index + 1}</strong>
@@ -1100,7 +1127,7 @@ function App() {
                   </div>
 
                   <div className="builder-list">
-                    {schema.features.map((feature, index) => (
+                    {(schema.features || []).map((feature, index) => (
                       <section key={index} className="builder-item">
                         <div className="builder-item-head">
                           <strong>Fitur {index + 1}</strong>
@@ -1153,7 +1180,7 @@ function App() {
                 {message && <p className="form-message mb-2">{message}</p>}
 
                 <div className="builder-list">
-                  {schema.fields.map((field, index) => (
+                  {(schema.fields || []).map((field, index) => (
                     <section key={field.id} className="builder-item">
                       <div className="builder-item-head">
                         <strong>Field {index + 1}</strong>
@@ -1299,7 +1326,7 @@ function App() {
                         <thead>
                           <tr>
                             <th>Waktu Daftar</th>
-                            {schema.fields.map((field) => (
+                            {(schema.fields || []).map((field) => (
                               <th key={field.id}>{field.label}</th>
                             ))}
                             <th>Aksi</th>
@@ -1308,7 +1335,7 @@ function App() {
                         <tbody>
                           {paginatedSubmissions.length === 0 ? (
                             <tr>
-                              <td colSpan={schema.fields.length + 2} className="text-center py-4">
+                              <td colSpan={(schema.fields || []).length + 2} className="text-center py-4">
                                 Tidak ada data yang cocok.
                               </td>
                             </tr>
@@ -1316,7 +1343,7 @@ function App() {
                             paginatedSubmissions.map((sub) => (
                               <tr key={sub.id}>
                                 <td>{formatSubmissionDate(sub).day}<br/><small>{formatSubmissionDate(sub).time}</small></td>
-                                {schema.fields.map((field) => {
+                {(schema.fields || []).map((field) => {
                                   const answer = sub.answers.find((a) => a.label === field.label)
                                   return <td key={field.id}>{answer ? answer.value : '-'}</td>
                                 })}
