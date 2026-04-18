@@ -99,9 +99,17 @@ Jika environment variable diset, nilai ini akan digunakan sebagai default.
 ## Storage
 
 Konfigurasi email disimpan dalam schema dan mendukung:
-- Vercel KV Storage
-- Supabase Storage
+- Supabase Storage (production - recommended)
 - Local JSON file (development)
+
+**Important:** Email configuration is stored in the `email_config` column in Supabase's `event_schema` table. If you're migrating from an older version, you need to run the database migration to add this column.
+
+### Verifying Email Config Persistence
+
+After saving email configuration:
+1. Restart the server
+2. Check if the configuration is still loaded (not reverted to defaults)
+3. Verify directly in Supabase table that `email_config` column has data
 
 ## Troubleshooting
 
@@ -112,6 +120,22 @@ Konfigurasi email disimpan dalam schema dan mendukung:
 3. Pastikan "From Email" menggunakan domain yang sudah diverifikasi
 4. Cek console log untuk error message
 5. Gunakan fitur "Test Email" untuk debugging
+6. Periksa apakah email config tersimpan dengan benar di database
+
+### Email config hilang setelah restart
+
+Jika email config hilang setelah server restart:
+1. Pastikan Anda menggunakan Supabase storage (bukan local file untuk production)
+2. Verifikasi kolom `email_config` ada di tabel `event_schema`
+3. Jalankan migration SQL jika belum: `ALTER TABLE event_schema ADD COLUMN IF NOT EXISTS email_config JSONB DEFAULT NULL;`
+4. Cek server logs untuk error saat menyimpan config
+
+### Test email menunjukkan sukses tapi tidak terkirim
+
+1. Cek server logs untuk pesan "skipped" atau error details
+2. Pastikan Resend API key benar-benar valid (bukan placeholder)
+3. Verifikasi domain sender sudah diverifikasi di Resend dashboard
+4. Cek apakah ada error di Resend dashboard logs
 
 ### Email masuk spam
 

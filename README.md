@@ -200,6 +200,26 @@ R2_ACCESS_KEY_ID=...
 R2_SECRET_ACCESS_KEY=...
 R2_BUCKET_NAME=...
 R2_PUBLIC_URL=...
+RESEND_API_KEY=re_your_api_key_here
 ```
+
+## Migrating Existing Deployments
+
+If you're upgrading from an older version, you need to add missing columns to your Supabase database:
+
+```sql
+-- Add email_config, highlights, and features columns
+ALTER TABLE event_schema
+ADD COLUMN IF NOT EXISTS email_config JSONB DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS highlights JSONB DEFAULT '[]'::jsonb,
+ADD COLUMN IF NOT EXISTS features JSONB DEFAULT '[]'::jsonb;
+```
+
+After running the migration:
+1. Reconfigure email settings via admin UI (previous settings were not persisted)
+2. Test email functionality using the "Test Email" feature
+3. Verify configuration persists after server restart
+
+For detailed email setup instructions, see [EMAIL_SETUP.md](./EMAIL_SETUP.md).
 
 Jika frontend dan backend sama-sama ada di Vercel project ini, `VITE_API_BASE_URL` dapat dibiarkan kosong agar frontend memakai same-origin `/api/*`.

@@ -116,6 +116,20 @@ export async function getEmailConfig() {
 export async function saveEmailConfig(emailConfig) {
   const schema = await getSchema()
   schema.emailConfig = emailConfig
-  await saveSchema(schema)
+  const savedSchema = await saveSchema(schema)
+  
+  if (!savedSchema) {
+    console.error('[store] Failed to save email config - saveSchema returned null')
+    throw new Error('Failed to persist email configuration')
+  }
+  
+  // Verify persistence by reading back
+  const verifySchema = await getSchema()
+  if (!verifySchema.emailConfig) {
+    console.error('[store] Email config not persisted after save')
+    throw new Error('Email configuration was not persisted')
+  }
+  
+  console.log('[store] Email config saved and verified successfully')
   return emailConfig
 }

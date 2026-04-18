@@ -38,6 +38,7 @@ function rowToSchema(row) {
     fields: row.fields,
     highlights: row.highlights ?? [],
     features: row.features ?? [],
+    emailConfig: row.email_config ?? null,
   }
 }
 
@@ -54,6 +55,7 @@ function schemaToRow(schema) {
     fields: schema.fields ?? [],
     highlights: schema.highlights ?? [],
     features: schema.features ?? [],
+    email_config: schema.emailConfig ?? null,
     updated_at: new Date().toISOString(),
   }
 }

@@ -414,16 +414,38 @@ export function createApp() {
       if (emailConfig.enabled) {
         const schema = await getSchema()
         
+        // Transform answers array to object format for email service
+        const submissionObject = { id: savedSubmission.id }
+        savedSubmission.answers.forEach(answer => {
+          // Map label to field ID from schema
+          const field = schema.fields.find(f => f.label === answer.label)
+          if (field) {
+            submissionObject[field.id] = answer.value
+          }
+        })
+        
         // Send participant email
         if (emailConfig.participantEmail.enabled) {
-          await sendParticipantEmail(emailConfig, schema, savedSubmission.answers)
-          console.info(`[EMAIL] Participant email sent to ${savedSubmission.answers.email}`)
+          const participantResult = await sendParticipantEmail(emailConfig, schema, submissionObject)
+          if (participantResult.skipped) {
+            console.warn(`[EMAIL] Participant email skipped: ${participantResult.reason}`)
+          } else if (participantResult.error) {
+            console.error(`[EMAIL] Participant email error: ${participantResult.error}`)
+          } else {
+            console.info(`[EMAIL] Participant email sent to ${submissionObject.email}`)
+          }
         }
 
         // Send admin notification
         if (emailConfig.adminEmail.enabled) {
-          await sendAdminNotification(emailConfig, schema, savedSubmission.answers)
-          console.info(`[EMAIL] Admin notification sent`)
+          const adminResult = await sendAdminNotification(emailConfig, schema, submissionObject)
+          if (adminResult.skipped) {
+            console.warn(`[EMAIL] Admin notification skipped: ${adminResult.reason}`)
+          } else if (adminResult.error) {
+            console.error(`[EMAIL] Admin notification error: ${adminResult.error}`)
+          } else {
+            console.info(`[EMAIL] Admin notification sent`)
+          }
         }
       }
     } catch (error) {

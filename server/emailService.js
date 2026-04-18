@@ -144,6 +144,23 @@ export async function sendParticipantEmail(emailConfig, eventData, submissionDat
     return { skipped: true, reason: 'Resend client not initialized' }
   }
 
+  // Defensive check: detect if submissionData is array format (legacy)
+  if (Array.isArray(submissionData)) {
+    console.warn('[EMAIL] Received array format submission data, attempting to extract email')
+    const emailAnswer = submissionData.find(a => a.label?.toLowerCase().includes('email'))
+    if (!emailAnswer) {
+      return { skipped: true, reason: 'Participant email not found in array submission data' }
+    }
+    // Convert to object format for processing
+    const converted = {}
+    submissionData.forEach(answer => {
+      if (answer.label && answer.value) {
+        converted[answer.label.toLowerCase().replace(/\s+/g, '-')] = answer.value
+      }
+    })
+    submissionData = converted
+  }
+
   const participantEmailField = submissionData.email || submissionData['email'] || null
   if (!participantEmailField) {
     return { skipped: true, reason: 'Participant email not found in submission data' }
@@ -221,6 +238,18 @@ export async function sendAdminNotification(emailConfig, eventData, submissionDa
   const adminEmail = emailConfig.adminEmail.recipient || process.env.ADMIN_EMAIL
   if (!adminEmail) {
     return { skipped: true, reason: 'Admin email recipient not configured' }
+  }
+
+  // Defensive check: detect if submissionData is array format (legacy)
+  if (Array.isArray(submissionData)) {
+    console.warn('[EMAIL] Received array format submission data in admin notification')
+    const converted = {}
+    submissionData.forEach(answer => {
+      if (answer.label && answer.value) {
+        converted[answer.label.toLowerCase().replace(/\s+/g, '-')] = answer.value
+      }
+    })
+    submissionData = converted
   }
 
   // Prepare variables for template

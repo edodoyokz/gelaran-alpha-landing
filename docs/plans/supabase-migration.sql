@@ -22,6 +22,9 @@ CREATE TABLE IF NOT EXISTS event_schema (
     date        text         NOT NULL DEFAULT '',
     poster      text         NOT NULL DEFAULT '',
     fields      jsonb        NOT NULL DEFAULT '[]'::jsonb,
+    highlights  jsonb        NOT NULL DEFAULT '[]'::jsonb,
+    features    jsonb        NOT NULL DEFAULT '[]'::jsonb,
+    email_config jsonb       DEFAULT NULL,
     updated_at  timestamptz  NOT NULL DEFAULT now(),
 
     -- Singleton constraint: only id = 1 is allowed
