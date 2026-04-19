@@ -25,7 +25,7 @@
       },
       {
         "id": "phone",
-        "label": "Nomer Whatsapp",
+        "label": "Nomor WhatsApp",
         "type": "tel",
         "required": true,
         "placeholder": "08xxxxxxxxxx",
@@ -63,7 +63,55 @@
         "title": "Exclusive Event Tee",
         "description": "Setiap peserta mendapatkan benefit eksklusif berupa T-Shirt Cotton sebagai bagian dari pengalaman event."
       }
-    ]
+    ],
+    "emailConfig": {
+      "enabled": true,
+      "resendApiKey": "",
+      "fromName": "Gelaran Admin",
+      "fromEmail": "mail@gelaran.web.id",
+      "replyTo": "mail@gelaran.web.id",
+      "paymentInfo": {
+        "bankName": "BCA",
+        "accountNumber": "0154742588",
+        "accountName": "Eden Denta Pratama",
+        "confirmWhatsapp": "081231501307"
+      },
+      "participantEmail": {
+        "enabled": true,
+        "subject": "Konfirmasi Pendaftaran - {{eventName}}",
+        "template": {
+          "headerColor": "#111827",
+          "logoUrl": "",
+          "greeting": "Pendaftaran Anda Sudah Kami Terima",
+          "bodyText": "Terima kasih sudah mendaftar di {{eventName}}. Data pendaftaran Anda sudah masuk ke sistem kami. Silakan lanjutkan pembayaran sesuai informasi di bawah ini, lalu klik tombol WhatsApp untuk konfirmasi pembayaran.",
+          "instructions": "Transfer ke rekening berikut:\nBCA {{paymentAccountNumber}}\na.n. {{paymentAccountName}}\n\nSetelah transfer, klik tombol Konfirmasi Pembayaran via WhatsApp di bawah email ini.",
+          "footerText": "Run the rhythm. Feel the beat. Experience the silence.",
+          "showEventDetails": true,
+          "showRegistrationData": true,
+          "showPaymentDetails": true,
+          "showWhatsappButton": true,
+          "whatsappButtonText": "Konfirmasi Pembayaran via WhatsApp"
+        }
+      },
+      "adminEmail": {
+        "enabled": true,
+        "recipient": "mail@gelaran.web.id",
+        "subject": "Pendaftaran Baru - {{participantName}}",
+        "template": {
+          "headerColor": "#059669",
+          "logoUrl": "",
+          "greeting": "Pendaftaran Baru Diterima",
+          "bodyText": "Ada peserta baru yang mendaftar untuk {{eventName}}.",
+          "instructions": "",
+          "footerText": "Notifikasi otomatis dari sistem pendaftaran.",
+          "showEventDetails": false,
+          "showRegistrationData": true,
+          "showPaymentDetails": false,
+          "showWhatsappButton": false,
+          "whatsappButtonText": ""
+        }
+      }
+    }
   },
   "submissions": []
 }

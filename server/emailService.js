@@ -2,12 +2,8 @@ import { Resend } from 'resend'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
-/**
- * Replace template variables with actual values
- * Supports: {{variableName}} syntax
- */
 function replaceVariables(template, variables) {
-  let result = template
+  let result = String(template || '')
   for (const [key, value] of Object.entries(variables)) {
     const regex = new RegExp(`{{${key}}}`, 'g')
     result = result.replace(regex, value || '')
@@ -15,9 +11,114 @@ function replaceVariables(template, variables) {
   return result
 }
 
-/**
- * Generate HTML email template
- */
+function normalizePhoneNumber(value = '') {
+  const digits = String(value).replace(/\D/g, '')
+  if (!digits) return ''
+  if (digits.startsWith('62')) return digits
+  if (digits.startsWith('0')) return `62${digits.slice(1)}`
+  return digits
+}
+
+function buildWhatsAppLink(phoneNumber, message) {
+  const normalized = normalizePhoneNumber(phoneNumber)
+  if (!normalized) return ''
+  const encoded = encodeURIComponent(message || '')
+  return `https://wa.me/${normalized}?text=${encoded}`
+}
+
+function extractSubmissionFields(eventData, submissionData) {
+  return Object.entries(submissionData)
+    .filter(([key]) => !key.startsWith('_') && key !== 'id' && key !== 'timestamp')
+    .map(([key, value]) => {
+      const field = eventData.fields?.find((item) => item.id === key)
+      return {
+        label: field?.label || key,
+        value: typeof value === 'boolean' ? (value ? 'Ya' : 'Tidak') : value,
+      }
+    })
+}
+
+function getDefaultEmailConfig(eventData = {}) {
+  return {
+    enabled: true,
+    resendApiKey: process.env.RESEND_API_KEY || '',
+    fromName: process.env.FROM_NAME || eventData.eventName || 'Gelaran Admin',
+    fromEmail: process.env.FROM_EMAIL || '',
+    replyTo: process.env.REPLY_TO || process.env.FROM_EMAIL || '',
+    paymentInfo: {
+      bankName: process.env.PAYMENT_BANK || 'BCA',
+      accountNumber: process.env.PAYMENT_ACCOUNT_NUMBER || '',
+      accountName: process.env.PAYMENT_ACCOUNT_NAME || '',
+      confirmWhatsapp: process.env.PAYMENT_CONFIRM_WHATSAPP || '',
+    },
+    participantEmail: {
+      enabled: true,
+      subject: 'Konfirmasi Pendaftaran - {{eventName}}',
+      template: {
+        headerColor: '#111827',
+        logoUrl: '',
+        greeting: 'Pendaftaran Anda Sudah Kami Terima',
+        bodyText:
+          'Terima kasih sudah mendaftar di {{eventName}}. Data pendaftaran Anda sudah masuk ke sistem kami. Silakan lanjutkan pembayaran sesuai informasi di bawah ini, lalu klik tombol WhatsApp untuk konfirmasi pembayaran.',
+        instructions:
+          'Transfer ke rekening berikut:\n{{paymentBank}} {{paymentAccountNumber}}\na.n. {{paymentAccountName}}\n\nSetelah transfer, klik tombol Konfirmasi Pembayaran via WhatsApp di bawah email ini.',
+        footerText: 'Run the rhythm. Feel the beat. Experience the silence.',
+        showEventDetails: true,
+        showRegistrationData: true,
+        showPaymentDetails: true,
+        showWhatsappButton: true,
+        whatsappButtonText: 'Konfirmasi Pembayaran via WhatsApp',
+      },
+    },
+    adminEmail: {
+      enabled: true,
+      recipient: process.env.ADMIN_EMAIL || process.env.FROM_EMAIL || '',
+      subject: 'Pendaftaran Baru - {{participantName}}',
+      template: {
+        headerColor: '#059669',
+        logoUrl: '',
+        greeting: 'Pendaftaran Baru Diterima',
+        bodyText: 'Ada peserta baru yang mendaftar untuk {{eventName}}.',
+        instructions: '',
+        footerText: 'Notifikasi otomatis dari sistem pendaftaran.',
+        showEventDetails: false,
+        showRegistrationData: true,
+        showPaymentDetails: false,
+        showWhatsappButton: false,
+        whatsappButtonText: '',
+      },
+    },
+  }
+}
+
+function mergeEmailConfig(emailConfig, eventData) {
+  const defaults = getDefaultEmailConfig(eventData)
+  return {
+    ...defaults,
+    ...(emailConfig || {}),
+    paymentInfo: {
+      ...defaults.paymentInfo,
+      ...(emailConfig?.paymentInfo || {}),
+    },
+    participantEmail: {
+      ...defaults.participantEmail,
+      ...(emailConfig?.participantEmail || {}),
+      template: {
+        ...defaults.participantEmail.template,
+        ...(emailConfig?.participantEmail?.template || {}),
+      },
+    },
+    adminEmail: {
+      ...defaults.adminEmail,
+      ...(emailConfig?.adminEmail || {}),
+      template: {
+        ...defaults.adminEmail.template,
+        ...(emailConfig?.adminEmail?.template || {}),
+      },
+    },
+  }
+}
+
 export function generateEmailHTML(templateConfig, variables) {
   const {
     headerColor = '#2563eb',
@@ -28,24 +129,25 @@ export function generateEmailHTML(templateConfig, variables) {
     footerText = '',
     showEventDetails = false,
     showRegistrationData = false,
-  } = templateConfig
+    showPaymentDetails = false,
+    showWhatsappButton = false,
+    whatsappButtonText = 'Konfirmasi via WhatsApp',
+  } = templateConfig || {}
 
-  const { eventData = {}, submissionData = {} } = variables
+  const { eventData = {}, submissionData = {}, paymentInfo = {}, whatsappLink = '' } = variables
 
-  // Build event details section
   let eventDetailsHTML = ''
   if (showEventDetails && eventData.eventName) {
     eventDetailsHTML = `
-      <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0;">
-        <h2 style="margin: 0 0 15px 0; color: #111827; font-size: 20px;">${eventData.eventName}</h2>
+      <div style="background: #f9fafb; padding: 20px; border-radius: 12px; margin: 20px 0;">
+        <h2 style="margin: 0 0 15px 0; color: #111827; font-size: 22px;">${eventData.eventName}</h2>
         ${eventData.date ? `<p style="margin: 8px 0; color: #4b5563;"><strong>📅 Tanggal:</strong> ${eventData.date}</p>` : ''}
         ${eventData.location ? `<p style="margin: 8px 0; color: #4b5563;"><strong>📍 Lokasi:</strong> ${eventData.location}</p>` : ''}
-        ${eventData.description ? `<p style="margin: 12px 0 0 0; color: #6b7280; line-height: 1.6;">${eventData.description}</p>` : ''}
+        ${eventData.tagline ? `<p style="margin: 12px 0 0 0; color: #111827; font-style: italic;">${eventData.tagline}</p>` : ''}
       </div>
     `
   }
 
-  // Build registration data section
   let registrationDataHTML = ''
   if (showRegistrationData && submissionData.fields) {
     const rows = submissionData.fields
@@ -69,19 +171,41 @@ export function generateEmailHTML(templateConfig, variables) {
     `
   }
 
-  // Build instructions section
+  let paymentDetailsHTML = ''
+  if (showPaymentDetails && paymentInfo.accountNumber) {
+    paymentDetailsHTML = `
+      <div style="background: #eff6ff; padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #bfdbfe;">
+        <h3 style="margin: 0 0 15px 0; color: #1d4ed8; font-size: 18px;">Informasi Pembayaran</h3>
+        <p style="margin: 8px 0; color: #1f2937;"><strong>Bank:</strong> ${paymentInfo.bankName || '-'}</p>
+        <p style="margin: 8px 0; color: #1f2937;"><strong>No. Rekening:</strong> ${paymentInfo.accountNumber || '-'}</p>
+        <p style="margin: 8px 0; color: #1f2937;"><strong>Atas Nama:</strong> ${paymentInfo.accountName || '-'}</p>
+      </div>
+    `
+  }
+
   let instructionsHTML = ''
   if (instructions) {
-    const instructionLines = instructions.split('\n').map((line) => `<p style="margin: 8px 0; color: #374151;">${line}</p>`).join('')
+    const resolvedInstructions = replaceVariables(String(instructions), variables)
+    const instructionLines = resolvedInstructions
+      .split('\n')
+      .map((line) => `<p style="margin: 8px 0; color: #374151;">${line}</p>`)
+      .join('')
     instructionsHTML = `
-      <div style="background: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+      <div style="background: #fef3c7; padding: 20px; border-radius: 12px; margin: 20px 0; border-left: 4px solid #f59e0b;">
         <h3 style="margin: 0 0 15px 0; color: #92400e; font-size: 18px;">Langkah Selanjutnya</h3>
         ${instructionLines}
       </div>
     `
   }
 
-  // Build complete HTML
+  const whatsappButtonHTML = showWhatsappButton && whatsappLink
+    ? `
+      <div style="margin: 28px 0; text-align: center;">
+        <a href="${whatsappLink}" style="display: inline-block; background: #16a34a; color: #ffffff; text-decoration: none; padding: 14px 24px; border-radius: 999px; font-weight: 600; font-size: 15px;">${whatsappButtonText}</a>
+      </div>
+    `
+    : ''
+
   const html = `
 <!DOCTYPE html>
 <html lang="id">
@@ -92,22 +216,18 @@ export function generateEmailHTML(templateConfig, variables) {
 </head>
 <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
   <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-    <!-- Header -->
     <div style="background: ${headerColor}; padding: 40px 30px; text-align: center;">
       ${logoUrl ? `<img src="${logoUrl}" alt="Logo" style="max-width: 150px; height: auto; margin-bottom: 20px;" />` : ''}
       <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">${greeting}</h1>
     </div>
-    
-    <!-- Content -->
     <div style="padding: 40px 30px;">
-      <p style="margin: 0 0 20px 0; color: #374151; font-size: 16px; line-height: 1.6;">${bodyText}</p>
-      
+      <p style="margin: 0 0 20px 0; color: #374151; font-size: 16px; line-height: 1.7;">${bodyText}</p>
       ${eventDetailsHTML}
       ${registrationDataHTML}
+      ${paymentDetailsHTML}
       ${instructionsHTML}
+      ${whatsappButtonHTML}
     </div>
-    
-    <!-- Footer -->
     <div style="background: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb;">
       <p style="margin: 0; color: #6b7280; font-size: 14px; line-height: 1.6;">${footerText}</p>
     </div>
@@ -116,222 +236,129 @@ export function generateEmailHTML(templateConfig, variables) {
 </html>
   `
 
-  // Replace variables in the final HTML
   return replaceVariables(html, variables)
 }
 
-/**
- * Send confirmation email to participant
- */
 export async function sendParticipantEmail(emailConfig, eventData, submissionData) {
-  // Validate email config exists
-  if (!emailConfig || !emailConfig.participantEmail) {
-    return { skipped: true, reason: 'Email config not configured' }
-  }
+  const config = mergeEmailConfig(emailConfig, eventData)
 
-  if (!emailConfig.participantEmail.enabled) {
+  if (!config.enabled || !config.participantEmail.enabled) {
     return { skipped: true, reason: 'Participant email disabled' }
   }
 
-  // Check if Resend API key is configured
-  if (!emailConfig.resendApiKey && !process.env.RESEND_API_KEY) {
-    return { skipped: true, reason: 'Resend API key not configured' }
-  }
-
-  // Initialize Resend with config API key if not already initialized
-  const resendClient = emailConfig.resendApiKey ? new Resend(emailConfig.resendApiKey) : resend
+  const resendClient = config.resendApiKey ? new Resend(config.resendApiKey) : resend
   if (!resendClient) {
     return { skipped: true, reason: 'Resend client not initialized' }
   }
 
-  // Defensive check: detect if submissionData is array format (legacy)
-  if (Array.isArray(submissionData)) {
-    console.warn('[EMAIL] Received array format submission data, attempting to extract email')
-    const emailAnswer = submissionData.find(a => a.label?.toLowerCase().includes('email'))
-    if (!emailAnswer) {
-      return { skipped: true, reason: 'Participant email not found in array submission data' }
-    }
-    // Convert to object format for processing
-    const converted = {}
-    submissionData.forEach(answer => {
-      if (answer.label && answer.value) {
-        converted[answer.label.toLowerCase().replace(/\s+/g, '-')] = answer.value
-      }
-    })
-    submissionData = converted
-  }
-
-  const participantEmailField = submissionData.email || submissionData['email'] || null
-  if (!participantEmailField) {
+  const participantEmail = submissionData.email || submissionData['email'] || null
+  if (!participantEmail) {
     return { skipped: true, reason: 'Participant email not found in submission data' }
   }
 
-  // Prepare variables for template
+  const participantName = submissionData['full-name'] || submissionData.name || 'Peserta'
+  const whatsappMessage = `Halo, saya ingin konfirmasi pembayaran ${eventData.eventName}. Nama: ${participantName}. Email: ${participantEmail}. No. WhatsApp: ${submissionData.phone || ''}.`
+  const whatsappLink = buildWhatsAppLink(config.paymentInfo.confirmWhatsapp, whatsappMessage)
+
   const variables = {
     eventName: eventData.eventName,
     eventDate: eventData.date,
     eventLocation: eventData.location,
-    eventDescription: eventData.description,
-    participantName: submissionData['full-name'] || submissionData.name || 'Peserta',
-    participantEmail: participantEmailField,
+    participantName,
+    participantEmail,
     registrationId: submissionData.id,
-    replyTo: emailConfig.replyTo,
+    paymentBank: config.paymentInfo.bankName,
+    paymentAccountNumber: config.paymentInfo.accountNumber,
+    paymentAccountName: config.paymentInfo.accountName,
+    confirmWhatsapp: config.paymentInfo.confirmWhatsapp,
+    replyTo: config.replyTo,
     eventData,
+    paymentInfo: config.paymentInfo,
+    whatsappLink,
     submissionData: {
       ...submissionData,
-      fields: Object.entries(submissionData)
-        .filter(([key]) => !key.startsWith('_') && key !== 'id' && key !== 'timestamp')
-        .map(([key, value]) => {
-          // Find label from schema if available
-          const field = eventData.fields?.find((f) => f.id === key)
-          return {
-            label: field?.label || key,
-            value: typeof value === 'boolean' ? (value ? 'Ya' : 'Tidak') : value,
-          }
-        }),
+      fields: extractSubmissionFields(eventData, submissionData),
     },
   }
 
-  const subject = replaceVariables(emailConfig.participantEmail.subject, variables)
-  const html = generateEmailHTML(emailConfig.participantEmail.template, variables)
+  const subject = replaceVariables(config.participantEmail.subject, variables)
+  const html = generateEmailHTML(config.participantEmail.template, variables)
 
   try {
-    const result = await resendClient.emails.send({
-      from: `${emailConfig.fromName} <${emailConfig.fromEmail}>`,
-      to: participantEmailField,
-      replyTo: emailConfig.replyTo,
+    return await resendClient.emails.send({
+      from: `${config.fromName} <${config.fromEmail}>`,
+      to: participantEmail,
+      replyTo: config.replyTo,
       subject,
       html,
     })
-
-    return result
   } catch (error) {
     console.error('Failed to send participant email:', error)
     return { error: true, message: error.message }
   }
 }
 
-/**
- * Send notification email to admin
- */
 export async function sendAdminNotification(emailConfig, eventData, submissionData) {
-  // Validate email config exists
-  if (!emailConfig || !emailConfig.adminEmail) {
-    return { skipped: true, reason: 'Email config not configured' }
-  }
+  const config = mergeEmailConfig(emailConfig, eventData)
 
-  if (!emailConfig.adminEmail.enabled) {
+  if (!config.enabled || !config.adminEmail.enabled) {
     return { skipped: true, reason: 'Admin email disabled' }
   }
 
-  // Check if Resend API key is configured
-  if (!emailConfig.resendApiKey && !process.env.RESEND_API_KEY) {
-    return { skipped: true, reason: 'Resend API key not configured' }
-  }
-
-  // Initialize Resend with config API key if not already initialized
-  const resendClient = emailConfig.resendApiKey ? new Resend(emailConfig.resendApiKey) : resend
+  const resendClient = config.resendApiKey ? new Resend(config.resendApiKey) : resend
   if (!resendClient) {
     return { skipped: true, reason: 'Resend client not initialized' }
   }
 
-  const adminEmail = emailConfig.adminEmail.recipient || process.env.ADMIN_EMAIL
+  const adminEmail = config.adminEmail.recipient || process.env.ADMIN_EMAIL
   if (!adminEmail) {
     return { skipped: true, reason: 'Admin email recipient not configured' }
   }
 
-  // Defensive check: detect if submissionData is array format (legacy)
-  if (Array.isArray(submissionData)) {
-    console.warn('[EMAIL] Received array format submission data in admin notification')
-    const converted = {}
-    submissionData.forEach(answer => {
-      if (answer.label && answer.value) {
-        converted[answer.label.toLowerCase().replace(/\s+/g, '-')] = answer.value
-      }
-    })
-    submissionData = converted
-  }
-
-  // Prepare variables for template
   const variables = {
     eventName: eventData.eventName,
-    eventDate: eventData.date,
-    eventLocation: eventData.location,
     participantName: submissionData['full-name'] || submissionData.name || 'Peserta',
     participantEmail: submissionData.email || submissionData['email'] || '',
     registrationId: submissionData.id,
-    replyTo: emailConfig.replyTo,
+    replyTo: config.replyTo,
     eventData,
+    paymentInfo: config.paymentInfo,
+    whatsappLink: '',
     submissionData: {
       ...submissionData,
-      fields: Object.entries(submissionData)
-        .filter(([key]) => !key.startsWith('_') && key !== 'id' && key !== 'timestamp')
-        .map(([key, value]) => {
-          const field = eventData.fields?.find((f) => f.id === key)
-          return {
-            label: field?.label || key,
-            value: typeof value === 'boolean' ? (value ? 'Ya' : 'Tidak') : value,
-          }
-        }),
+      fields: extractSubmissionFields(eventData, submissionData),
     },
   }
 
-  const subject = replaceVariables(emailConfig.adminEmail.subject, variables)
-  const html = generateEmailHTML(emailConfig.adminEmail.template, variables)
+  const subject = replaceVariables(config.adminEmail.subject, variables)
+  const html = generateEmailHTML(config.adminEmail.template, variables)
 
   try {
-    const result = await resendClient.emails.send({
-      from: `${emailConfig.fromName} <${emailConfig.fromEmail}>`,
+    return await resendClient.emails.send({
+      from: `${config.fromName} <${config.fromEmail}>`,
       to: adminEmail,
-      replyTo: emailConfig.replyTo,
+      replyTo: config.replyTo,
       subject,
       html,
     })
-
-    return result
   } catch (error) {
-    console.error('Failed to send admin notification:', error)
+    console.error('Failed to send admin email:', error)
     return { error: true, message: error.message }
   }
 }
 
-/**
- * Send test email
- */
 export async function sendTestEmail(emailConfig, eventData, testRecipient, emailType = 'participant') {
-  // Validate email config exists
-  if (!emailConfig) {
-    return { error: true, message: 'Email config not configured' }
-  }
-
-  // Check if Resend API key is configured
-  if (!emailConfig.resendApiKey && !process.env.RESEND_API_KEY) {
-    return { error: true, message: 'Resend API key not configured' }
-  }
-
-  if (!testRecipient) {
-    return { error: true, message: 'Test recipient email is required' }
-  }
-
-  // Create mock submission data for testing
   const mockSubmissionData = {
-    id: 'TEST-' + Date.now(),
-    timestamp: new Date().toISOString(),
+    id: `TEST-${Date.now()}`,
     'full-name': 'John Doe (Test)',
     email: testRecipient,
     phone: '081234567890',
-    category: 'Umum',
-    motivation: 'Ini adalah test email untuk melihat tampilan email yang akan dikirim ke peserta.',
+    'tshirt-size': 'L',
   }
 
-  try {
-    if (emailType === 'participant') {
-      return await sendParticipantEmail(emailConfig, eventData, mockSubmissionData)
-    } else {
-      return await sendAdminNotification(emailConfig, eventData, mockSubmissionData)
-    }
-  } catch (error) {
-    console.error('Failed to send test email:', error)
-    return { error: true, message: error.message }
+  if (emailType === 'participant') {
+    return sendParticipantEmail(emailConfig, eventData, mockSubmissionData)
   }
+
+  return sendAdminNotification(emailConfig, eventData, mockSubmissionData)
 }
