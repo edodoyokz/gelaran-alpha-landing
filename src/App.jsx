@@ -107,6 +107,12 @@ function apiUrl(path) {
   return apiBaseUrl ? `${apiBaseUrl}${path}` : path
 }
 
+function getPosterUrl(posterPath) {
+  const normalizedPosterPath = String(posterPath || '').trim()
+  if (!normalizedPosterPath) return apiUrl(defaultSchema.poster)
+  return apiUrl(normalizedPosterPath)
+}
+
 function getPrimaryAnswer(submission) {
   return String(submission.answers?.[0]?.value || '').toLowerCase()
 }
@@ -375,6 +381,8 @@ function App() {
     return defaultSchema.highlights
   }, [schema.highlights])
 
+  const posterUrl = useMemo(() => getPosterUrl(schema.poster), [schema.poster])
+
   async function saveSchemaToServer(nextSchema) {
     setSaving(true)
     try {
@@ -525,6 +533,11 @@ function App() {
       }
 
       const data = await response.json()
+      if (!data.posterUrl) {
+        setMessage('Upload berhasil, tetapi URL poster tidak valid dari server.')
+        return
+      }
+
       setSchema((current) => ({ ...current, poster: data.posterUrl }))
       setMessage('Poster berhasil diupload. Klik simpan perubahan untuk menyimpan schema.')
     } catch {
@@ -909,7 +922,15 @@ function App() {
             </div>
 
             <div className="poster-card">
-              <img src={schema.poster} alt={schema.eventName} />
+              <img
+                src={posterUrl}
+                alt={schema.eventName}
+                onError={(event) => {
+                  if (event.currentTarget.dataset.fallbackApplied === 'true') return
+                  event.currentTarget.dataset.fallbackApplied = 'true'
+                  event.currentTarget.src = getPosterUrl(defaultSchema.poster)
+                }}
+              />
               <div className="poster-badge">
                 <span>Poster event</span>
                 <strong>{schema.eventName}</strong>
@@ -1135,7 +1156,16 @@ function App() {
                     <p>Upload poster baru agar langsung tampil di landing page peserta.</p>
                   </div>
                   <div className="upload-actions">
-                    <img src={schema.poster} alt="Current poster" className="mini-poster" />
+                    <img
+                      src={posterUrl}
+                      alt="Current poster"
+                      className="mini-poster"
+                      onError={(event) => {
+                        if (event.currentTarget.dataset.fallbackApplied === 'true') return
+                        event.currentTarget.dataset.fallbackApplied = 'true'
+                        event.currentTarget.src = getPosterUrl(defaultSchema.poster)
+                      }}
+                    />
                     <button className="ghost-btn" onClick={() => fileInputRef.current?.click()} disabled={uploadingPoster}>
                       {uploadingPoster ? 'Mengupload...' : 'Ganti Poster'}
                     </button>
