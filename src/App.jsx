@@ -1532,7 +1532,7 @@ function App() {
                   </>
                 )}
               </div>
-            )
+            )}
 
             {adminTab === 'email' && (
               <div className="admin-main-card">
