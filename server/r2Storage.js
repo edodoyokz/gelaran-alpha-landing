@@ -2,20 +2,42 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 
 let s3Client = null
 
+function normalizePublicUrl(publicUrl) {
+  const rawValue = String(publicUrl || '').trim()
+  if (!rawValue) return ''
+
+  const normalizedProtocolUrl = /^https?:\/\//i.test(rawValue) ? rawValue : `https://${rawValue}`
+  const match = normalizedProtocolUrl.match(/^https?:\/\/[^/\s]+/i)
+  if (!match) return ''
+
+  return match[0].replace(/\/+$/, '')
+}
+
+function isValidPublicUrl(publicUrl) {
+  if (!publicUrl) return false
+
+  try {
+    const parsed = new URL(publicUrl)
+    return /^https?:$/.test(parsed.protocol) && Boolean(parsed.hostname)
+  } catch {
+    return false
+  }
+}
+
 function getR2Config() {
   const accountId = process.env.R2_ACCOUNT_ID
   const accessKeyId = process.env.R2_ACCESS_KEY_ID
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY
   const bucketName = process.env.R2_BUCKET_NAME
-  const publicUrl = process.env.R2_PUBLIC_URL
+  const publicUrl = normalizePublicUrl(process.env.R2_PUBLIC_URL)
 
   return {
-    enabled: Boolean(accessKeyId && secretAccessKey && bucketName && publicUrl),
+    enabled: Boolean(accessKeyId && secretAccessKey && bucketName && isValidPublicUrl(publicUrl)),
     accountId,
     accessKeyId,
     secretAccessKey,
     bucketName,
-    publicUrl: publicUrl?.replace(/\/+$/, ''), // strip trailing slashes
+    publicUrl,
   }
 }
 
@@ -46,7 +68,10 @@ export async function uploadR2File({ fileName, mimeType, buffer }) {
   try {
     const client = getS3Client()
     const config = getR2Config()
-    if (!client || !config.enabled) return null
+    if (!client || !config.enabled) {
+      console.error('R2 upload skipped: invalid or incomplete R2 configuration')
+      return null
+    }
 
     const key = `posters/${Date.now()}-${fileName}`
 
