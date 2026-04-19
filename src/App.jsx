@@ -152,7 +152,7 @@ async function apiFetch(path, options = {}) {
         ...(options.headers || {}),
       }
 
-  // Add CSRF token for state-changing requests
+  // Add CSRF token for state-changing requests (including FormData)
   if (isStateChanging && csrfToken) {
     headers['X-CSRF-Token'] = csrfToken
   }
@@ -191,6 +191,8 @@ function App() {
   const [submissionSort, setSubmissionSort] = useState('newest')
   const [currentPage, setCurrentPage] = useState(1)
   const [deletingSubmissionId, setDeletingSubmissionId] = useState('')
+  const [selectedParticipant, setSelectedParticipant] = useState(null)
+  const [showDetailModal, setShowDetailModal] = useState(false)
   const [emailConfig, setEmailConfig] = useState(null)
   const [testEmailRecipient, setTestEmailRecipient] = useState('')
   const [testEmailType, setTestEmailType] = useState('participant')
@@ -584,6 +586,14 @@ function App() {
       const savedEntry = await response.json()
       setSubmissions((current) => [savedEntry, ...current])
       setFormData({})
+      
+      // Show success alert with email check reminder
+      window.alert(
+        '✅ Terima kasih! Pendaftaran Anda berhasil.\n\n' +
+        '📧 Silakan cek inbox email Anda untuk konfirmasi.\n' +
+        '⚠️ Jika tidak ada di inbox, cek juga folder Spam/Junk.'
+      )
+      
       setMessage('Pendaftaran berhasil dikirim. Data peserta sudah tersimpan di server.')
     } catch {
       setMessage('Gagal mengirim pendaftaran.')
@@ -641,11 +651,26 @@ function App() {
 
       setSubmissions((current) => current.filter((submission) => submission.id !== submissionId))
       setMessage('Data peserta berhasil dihapus.')
+      
+      // Close modal if the deleted participant was being viewed
+      if (selectedParticipant?.id === submissionId) {
+        closeParticipantDetail()
+      }
     } catch {
       setMessage('Gagal menghapus data peserta.')
     } finally {
       setDeletingSubmissionId('')
     }
+  }
+
+  function openParticipantDetail(submission) {
+    setSelectedParticipant(submission)
+    setShowDetailModal(true)
+  }
+
+  function closeParticipantDetail() {
+    setShowDetailModal(false)
+    setSelectedParticipant(null)
   }
 
   function exportCsv() {
@@ -998,6 +1023,10 @@ function App() {
               {message ? <p className="form-message">{message}</p> : null}
             </article>
           </section>
+
+          <footer className="site-footer">
+            <p>&copy; 2026 by hexadigiworks</p>
+          </footer>
         </main>
       ) : isAdminAuthenticated ? (
         <main className="admin-layout">
@@ -1396,13 +1425,21 @@ function App() {
                                   return <td key={field.id}>{answer ? answer.value : '-'}</td>
                                 })}
                                 <td>
-                                  <button
-                                    className="delete-btn-small"
-                                    onClick={() => deleteSubmissionById(sub.id)}
-                                    disabled={deletingSubmissionId === sub.id}
-                                  >
-                                    {deletingSubmissionId === sub.id ? '...' : 'Hapus'}
-                                  </button>
+                                  <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                      className="ghost-btn-small"
+                                      onClick={() => openParticipantDetail(sub)}
+                                    >
+                                      Lihat Detail
+                                    </button>
+                                    <button
+                                      className="delete-btn-small"
+                                      onClick={() => deleteSubmissionById(sub.id)}
+                                      disabled={deletingSubmissionId === sub.id}
+                                    >
+                                      {deletingSubmissionId === sub.id ? '...' : 'Hapus'}
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))
@@ -1432,10 +1469,70 @@ function App() {
                         </button>
                       </div>
                     </div>
+
+                    {/* Modal Detail Peserta */}
+                    {showDetailModal && selectedParticipant && (
+                      <div className="modal-overlay" onClick={closeParticipantDetail}>
+                        <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+                          <div className="modal-header">
+                            <h3>Detail Peserta</h3>
+                            <button 
+                              className="modal-close-btn" 
+                              onClick={closeParticipantDetail}
+                              aria-label="Tutup modal"
+                            >
+                              ×
+                            </button>
+                          </div>
+                          <div className="modal-body">
+                            <div className="participant-detail-section">
+                              <div className="participant-detail-row">
+                                <span className="detail-label">ID Peserta:</span>
+                                <span className="detail-value">{selectedParticipant.id}</span>
+                              </div>
+                              <div className="participant-detail-row">
+                                <span className="detail-label">Waktu Pendaftaran:</span>
+                                <span className="detail-value">
+                                  {selectedParticipant.submittedAt || 
+                                   new Date(selectedParticipant.submittedAtIso).toLocaleString('id-ID')}
+                                </span>
+                              </div>
+                              <hr className="detail-divider" />
+                              <h4 className="detail-section-title">Data Peserta</h4>
+                              {selectedParticipant.answers.map((answer, idx) => (
+                                <div key={idx} className="participant-detail-row">
+                                  <span className="detail-label">{answer.label}:</span>
+                                  <span className="detail-value">
+                                    {typeof answer.value === 'boolean' 
+                                      ? (answer.value ? 'Ya' : 'Tidak')
+                                      : answer.value || '-'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="modal-footer">
+                            <button 
+                              className="ghost-btn" 
+                              onClick={closeParticipantDetail}
+                            >
+                              Tutup
+                            </button>
+                            <button 
+                              className="delete-btn" 
+                              onClick={() => deleteSubmissionById(selectedParticipant.id)}
+                              disabled={deletingSubmissionId === selectedParticipant.id}
+                            >
+                              {deletingSubmissionId === selectedParticipant.id ? 'Menghapus...' : 'Hapus Peserta'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
-            )}
+            )
 
             {adminTab === 'email' && (
               <div className="admin-main-card">
