@@ -788,6 +788,35 @@ function App() {
     })
   }
 
+  function updateEmailConfigDeep(section, nestedSection, key, value) {
+    setEmailConfig((current) => {
+      if (!current || !current[section] || !current[section][nestedSection]) return current
+      return {
+        ...current,
+        [section]: {
+          ...current[section],
+          [nestedSection]: {
+            ...current[section][nestedSection],
+            [key]: value,
+          },
+        },
+      }
+    })
+  }
+
+  function updateEmailPaymentInfo(key, value) {
+    setEmailConfig((current) => {
+      if (!current) return current
+      return {
+        ...current,
+        paymentInfo: {
+          ...(current.paymentInfo || {}),
+          [key]: value,
+        },
+      }
+    })
+  }
+
   if (loading) {
     return <div className="loading-screen">Memuat webapp event...</div>
   }
@@ -1468,6 +1497,63 @@ function App() {
                 </div>
 
                 <div className="admin-form-section">
+                  <label className="field-block">
+                    <span>Reply-To Email</span>
+                    <input
+                      type="email"
+                      value={emailConfig.replyTo || ''}
+                      onChange={(e) => updateEmailConfig('replyTo', e.target.value)}
+                      placeholder="support@yourdomain.com"
+                    />
+                  </label>
+
+                  <div className="panel-head compact-head">
+                    <div>
+                      <h4>Informasi Pembayaran</h4>
+                      <p>Data ini ditampilkan di email peserta dan dipakai untuk CTA WhatsApp</p>
+                    </div>
+                  </div>
+
+                  <div className="admin-form-grid builder-grid">
+                    <label className="field-block">
+                      <span>Bank</span>
+                      <input
+                        value={emailConfig.paymentInfo?.bankName || ''}
+                        onChange={(e) => updateEmailPaymentInfo('bankName', e.target.value)}
+                        placeholder="BCA"
+                      />
+                    </label>
+
+                    <label className="field-block">
+                      <span>No. Rekening</span>
+                      <input
+                        value={emailConfig.paymentInfo?.accountNumber || ''}
+                        onChange={(e) => updateEmailPaymentInfo('accountNumber', e.target.value)}
+                        placeholder="0154742588"
+                      />
+                    </label>
+
+                    <label className="field-block">
+                      <span>Atas Nama</span>
+                      <input
+                        value={emailConfig.paymentInfo?.accountName || ''}
+                        onChange={(e) => updateEmailPaymentInfo('accountName', e.target.value)}
+                        placeholder="Nama rekening"
+                      />
+                    </label>
+
+                    <label className="field-block">
+                      <span>WhatsApp Konfirmasi</span>
+                      <input
+                        value={emailConfig.paymentInfo?.confirmWhatsapp || ''}
+                        onChange={(e) => updateEmailPaymentInfo('confirmWhatsapp', e.target.value)}
+                        placeholder="081231501307"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="admin-form-section">
                   <div className="panel-head compact-head">
                     <div>
                       <h4>Email Peserta</h4>
@@ -1496,14 +1582,45 @@ function App() {
                   </label>
 
                   <label className="field-block">
-                    <span>Body Template</span>
-                    <textarea
-                      rows="8"
-                      value={emailConfig.participantEmail.body}
-                      onChange={(e) => updateEmailConfigNested('participantEmail', 'body', e.target.value)}
-                      placeholder="Gunakan {{eventName}}, {{name}}, {{email}}, dll"
+                    <span>Greeting</span>
+                    <input
+                      value={emailConfig.participantEmail.template?.greeting || ''}
+                      onChange={(e) => updateEmailConfigDeep('participantEmail', 'template', 'greeting', e.target.value)}
                     />
-                    <small>Variabel tersedia: {'{'}{'{'} eventName {'}'}{'}'}, {'{'}{'{'} name {'}'}{'}'}, {'{'}{'{'} email {'}'}{'}'}, {'{'}{'{'} location {'}'}{'}'}, {'{'}{'{'} date {'}'}{'}'}. Gunakan {'{'}{'{'} fieldName {'}'}{'}'}  untuk field custom.</small>
+                  </label>
+
+                  <label className="field-block">
+                    <span>Body Text</span>
+                    <textarea
+                      rows="5"
+                      value={emailConfig.participantEmail.template?.bodyText || ''}
+                      onChange={(e) => updateEmailConfigDeep('participantEmail', 'template', 'bodyText', e.target.value)}
+                    />
+                  </label>
+
+                  <label className="field-block">
+                    <span>Instructions</span>
+                    <textarea
+                      rows="6"
+                      value={emailConfig.participantEmail.template?.instructions || ''}
+                      onChange={(e) => updateEmailConfigDeep('participantEmail', 'template', 'instructions', e.target.value)}
+                    />
+                  </label>
+
+                  <label className="field-block">
+                    <span>Footer Text</span>
+                    <input
+                      value={emailConfig.participantEmail.template?.footerText || ''}
+                      onChange={(e) => updateEmailConfigDeep('participantEmail', 'template', 'footerText', e.target.value)}
+                    />
+                  </label>
+
+                  <label className="field-block">
+                    <span>WhatsApp Button Text</span>
+                    <input
+                      value={emailConfig.participantEmail.template?.whatsappButtonText || ''}
+                      onChange={(e) => updateEmailConfigDeep('participantEmail', 'template', 'whatsappButtonText', e.target.value)}
+                    />
                   </label>
                 </div>
 
@@ -1546,14 +1663,20 @@ function App() {
                   </label>
 
                   <label className="field-block">
-                    <span>Body Template</span>
-                    <textarea
-                      rows="8"
-                      value={emailConfig.adminEmail.body}
-                      onChange={(e) => updateEmailConfigNested('adminEmail', 'body', e.target.value)}
-                      placeholder="Gunakan {{eventName}}, {{name}}, {{email}}, dll"
+                    <span>Greeting</span>
+                    <input
+                      value={emailConfig.adminEmail.template?.greeting || ''}
+                      onChange={(e) => updateEmailConfigDeep('adminEmail', 'template', 'greeting', e.target.value)}
                     />
-                    <small>Variabel tersedia: {'{'}{'{'} eventName {'}'}{'}'}, {'{'}{'{'} name {'}'}{'}'}, {'{'}{'{'} email {'}'}{'}'}, {'{'}{'{'} location {'}'}{'}'}, {'{'}{'{'} date {'}'}{'}'}. Gunakan {'{'}{'{'} fieldName {'}'}{'}'}  untuk field custom.</small>
+                  </label>
+
+                  <label className="field-block">
+                    <span>Body Text</span>
+                    <textarea
+                      rows="4"
+                      value={emailConfig.adminEmail.template?.bodyText || ''}
+                      onChange={(e) => updateEmailConfigDeep('adminEmail', 'template', 'bodyText', e.target.value)}
+                    />
                   </label>
                 </div>
 
