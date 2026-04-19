@@ -27,27 +27,27 @@ import { sendParticipantEmail, sendAdminNotification, sendTestEmail } from './em
 
 // CSRF Protection Middleware
 function createCsrfMiddleware() {
-  const csrfTokens = new Map()
-
   function generateCsrfToken(sessionId) {
-    const existingToken = csrfTokens.get(sessionId)
-    if (existingToken) {
-      return existingToken
-    }
+    if (!sessionId) return null
 
-    const token = crypto.randomBytes(32).toString('hex')
-    csrfTokens.set(sessionId, token)
-    return token
+    return crypto
+      .createHmac('sha256', sessionSecret)
+      .update(`csrf:${sessionId}`)
+      .digest('hex')
   }
 
   function validateCsrfToken(sessionId, token) {
-    const storedToken = csrfTokens.get(sessionId)
-    return storedToken === token
-  }
+    if (!sessionId || !token) return false
 
-  function clearCsrfToken(sessionId) {
-    if (!sessionId) return
-    csrfTokens.delete(sessionId)
+    const expectedToken = generateCsrfToken(sessionId)
+    if (!expectedToken) return false
+
+    const providedToken = String(token)
+    if (providedToken.length !== expectedToken.length) {
+      return false
+    }
+
+    return crypto.timingSafeEqual(Buffer.from(expectedToken), Buffer.from(providedToken))
   }
 
   return {
@@ -68,22 +68,18 @@ function createCsrfMiddleware() {
       const token = req.headers['x-csrf-token'] || req.body._csrf
 
       if (!token || !validateCsrfToken(sessionId, token)) {
-        const storedToken = csrfTokens.get(sessionId)
+        const expectedToken = generateCsrfToken(sessionId)
         console.warn('[CSRF] Invalid CSRF token', {
           ip: req.ip,
           path: req.path,
           hasSession: Boolean(sessionId),
           hasHeaderToken: Boolean(req.headers['x-csrf-token']),
           providedTokenPreview: String(token || '').slice(0, 8),
-          storedTokenPreview: String(storedToken || '').slice(0, 8),
+          expectedTokenPreview: String(expectedToken || '').slice(0, 8),
         })
         return res.status(403).json({ message: 'Invalid CSRF token' })
       }
 
-      next()
-    },
-    clearToken: (req, _res, next) => {
-      clearCsrfToken(req.cookies.admin_session)
       next()
     }
   }
@@ -321,7 +317,7 @@ export function createApp() {
     res.json({ authenticated: true })
   })
 
-  app.post('/api/auth/logout', csrf.clearToken, (_req, res) => {
+  app.post('/api/auth/logout', (_req, res) => {
     res.clearCookie('admin_session', {
       httpOnly: true,
       sameSite: 'lax',
