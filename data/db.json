@@ -25,27 +25,19 @@
       },
       {
         "id": "phone",
-        "label": "Nomor WhatsApp",
+        "label": "Nomer Whatsapp",
         "type": "tel",
         "required": true,
         "placeholder": "08xxxxxxxxxx",
         "options": ""
       },
       {
-        "id": "category",
-        "label": "Kategori Peserta",
+        "id": "tshirt-size",
+        "label": "Size T-Shirt",
         "type": "select",
         "required": true,
         "placeholder": "",
-        "options": "Pelajar, Mahasiswa, Umum, Komunitas"
-      },
-      {
-        "id": "motivation",
-        "label": "Motivasi Mengikuti Event",
-        "type": "textarea",
-        "required": false,
-        "placeholder": "Ceritakan singkat alasan Anda",
-        "options": ""
+        "options": "S, M, L, XL"
       }
     ],
     "highlights": [
