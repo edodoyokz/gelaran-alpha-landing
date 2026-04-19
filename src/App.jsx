@@ -20,22 +20,21 @@ function useDebounce(value, delay) {
 }
 
 const defaultSchema = {
-  eventName: 'Gelaran Heritage Fest 2026',
-  tagline: 'Pendaftaran peserta event yang modern, rapi, dan tanpa Google Form.',
+  eventName: 'RB SILENT BEAT RUN 2026',
+  tagline: 'Run the rhythm. Feel the beat. Experience the silence.',
   description:
-    'Kelola event, kumpulkan data peserta, dan publikasikan poster acara dalam satu webapp yang mudah digunakan.',
-  location: 'Solo, Indonesia',
-  date: '24 - 26 Agustus 2026',
+    'Sebuah cara baru menikmati lari hadir pertama kalinya di Solo. Bukan sekadar fun run—ini adalah pengalaman. RB Silent Beat Run menggabungkan energi lari dengan ritme musik dalam satu frekuensi yang sama. Setiap langkah bukan hanya tentang jarak, tapi tentang rasa. Dengan headphone yang terhubung langsung ke DJ, kamu akan berlari dalam duniamu sendiri—tanpa distraksi, hanya kamu, beat, dan vibe yang menyatu. Ini bukan lomba soal siapa tercepat. Ini tentang menikmati perjalanan. Ini tentang merasakan momen.',
+  location: 'Ruang Bahagia, Lokananta Solo',
+  date: '29 April 2026',
   poster: '/design-reference.png',
   highlights: [
-    { label: 'Kategori Lari', value: '5K, 10K, HM, FM' },
-    { label: 'Total Hadiah', value: 'Rp 200 Juta' },
-    { label: 'Benefit Eksklusif', value: 'Jersey & Medali' },
+    { label: 'Kategori Lari', value: 'Fun Run 5K' },
+    { label: 'Benefit Eksklusif', value: 'T-Shirt Cotton' },
   ],
   features: [
-    { title: 'Lintasan Steril & Aman', description: 'Rute lari di jantung kota dengan pengawalan penuh dan water station di setiap 2.5km.' },
-    { title: 'Timing System Akurat', description: 'Sistem pencatatan waktu real-time menggunakan teknologi chip untuk akurasi maksimal.' },
-    { title: 'Race Kit & Medali', description: 'Jersey drifit premium, nomor BIB, dan medali finisher eksklusif untuk setiap peserta.' },
+    { title: 'Silent Run Experience', description: 'Nikmati pengalaman lari dengan headphone yang terhubung langsung ke DJ, menghadirkan beat dan vibe yang menyatu di setiap langkah.' },
+    { title: 'Fun Run 5K', description: 'Berlari santai dalam format 5K yang fokus pada pengalaman, momen, dan keseruan menikmati ritme sepanjang rute.' },
+    { title: 'Exclusive Event Tee', description: 'Setiap peserta mendapatkan benefit eksklusif berupa T-Shirt Cotton sebagai bagian dari pengalaman event.' },
   ],
   fields: [
     {

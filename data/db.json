@@ -1,10 +1,10 @@
 {
   "schema": {
-    "eventName": "City Marathon 2026",
-    "tagline": "Run For The Win! Join the biggest marathon event this year.",
-    "description": "Bersiaplah untuk memacu adrenalin di City Marathon 2026. Taklukan tantangan, cetak rekor pribadi, dan rasakan euforia lari bersama ribuan pelari lainnya di lintasan ikonik jantung kota.",
-    "location": "City Center Start/Finish",
-    "date": "19 Oktober 2026",
+    "eventName": "RB SILENT BEAT RUN 2026",
+    "tagline": "Run the rhythm. Feel the beat. Experience the silence.",
+    "description": "Sebuah cara baru menikmati lari hadir pertama kalinya di Solo. Bukan sekadar fun run—ini adalah pengalaman. RB Silent Beat Run menggabungkan energi lari dengan ritme musik dalam satu frekuensi yang sama. Setiap langkah bukan hanya tentang jarak, tapi tentang rasa. Dengan headphone yang terhubung langsung ke DJ, kamu akan berlari dalam duniamu sendiri—tanpa distraksi, hanya kamu, beat, dan vibe yang menyatu. Ini bukan lomba soal siapa tercepat. Ini tentang menikmati perjalanan. Ini tentang merasakan momen.",
+    "location": "Ruang Bahagia, Lokananta Solo",
+    "date": "29 April 2026",
     "poster": "/new_running_poster.png",
     "fields": [
       {
@@ -46,6 +46,30 @@
         "required": false,
         "placeholder": "Ceritakan singkat alasan Anda",
         "options": ""
+      }
+    ],
+    "highlights": [
+      {
+        "label": "Kategori Lari",
+        "value": "Fun Run 5K"
+      },
+      {
+        "label": "Benefit Eksklusif",
+        "value": "T-Shirt Cotton"
+      }
+    ],
+    "features": [
+      {
+        "title": "Silent Run Experience",
+        "description": "Nikmati pengalaman lari dengan headphone yang terhubung langsung ke DJ, menghadirkan beat dan vibe yang menyatu di setiap langkah."
+      },
+      {
+        "title": "Fun Run 5K",
+        "description": "Berlari santai dalam format 5K yang fokus pada pengalaman, momen, dan keseruan menikmati ritme sepanjang rute."
+      },
+      {
+        "title": "Exclusive Event Tee",
+        "description": "Setiap peserta mendapatkan benefit eksklusif berupa T-Shirt Cotton sebagai bagian dari pengalaman event."
       }
     ]
   },
