@@ -85,6 +85,24 @@ function formatOptions(options = '') {
     .filter(Boolean)
 }
 
+function ensureArray(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback
+}
+
+function normalizeSchema(inputSchema = {}) {
+  const merged = {
+    ...defaultSchema,
+    ...inputSchema,
+  }
+
+  return {
+    ...merged,
+    fields: ensureArray(inputSchema?.fields, defaultSchema.fields),
+    highlights: ensureArray(inputSchema?.highlights, defaultSchema.highlights),
+    features: ensureArray(inputSchema?.features, defaultSchema.features),
+  }
+}
+
 function apiUrl(path) {
   if (/^https?:\/\//.test(path)) return path
   return apiBaseUrl ? `${apiBaseUrl}${path}` : path
@@ -153,17 +171,9 @@ function App() {
   const [activeView, setActiveView] = useState('public')
   const [adminTab, setAdminTab] = useState('settings')
   const [schema, setSchema] = useState(defaultSchema)
-  
-  // Helper function to safely merge fetched schema with defaults
+
   const safeSetSchema = useCallback((fetchedSchema) => {
-    const merged = {
-      ...defaultSchema,
-      ...fetchedSchema,
-      fields: Array.isArray(fetchedSchema?.fields) ? fetchedSchema.fields : defaultSchema.fields,
-      highlights: Array.isArray(fetchedSchema?.highlights) ? fetchedSchema.highlights : defaultSchema.highlights,
-      features: Array.isArray(fetchedSchema?.features) ? fetchedSchema.features : defaultSchema.features,
-    }
-    setSchema(merged)
+    setSchema(normalizeSchema(fetchedSchema))
   }, [])
   const [submissions, setSubmissions] = useState([])
   const [formData, setFormData] = useState({})
@@ -235,7 +245,7 @@ function App() {
     return () => {
       controller.abort()
     }
-  }, [checkSession])
+  }, [checkSession, safeSetSchema])
 
   const loadAdminData = useCallback(async () => {
     setSubmissionsLoading(true)
@@ -267,7 +277,7 @@ function App() {
     } finally {
       setSubmissionsLoading(false)
     }
-  }, [])
+  }, [safeSetSchema])
 
   const debouncedSubmissionQuery = useDebounce(submissionQuery, 300)
 
@@ -348,7 +358,7 @@ function App() {
       title: `Ringkasan ${selectField.label}`,
       breakdown,
     }
-  }, [filteredSubmissions, schema.fields])
+  }, [filteredSubmissions, schema])
 
   const totalPages = Math.max(1, Math.ceil(filteredSubmissions.length / pageSize))
   const paginatedSubmissions = filteredSubmissions.slice(
@@ -367,9 +377,10 @@ function App() {
   async function saveSchemaToServer(nextSchema) {
     setSaving(true)
     try {
+      const normalizedSchema = normalizeSchema(nextSchema)
       const response = await apiFetch('/api/schema', {
         method: 'PUT',
-        body: JSON.stringify(nextSchema),
+        body: JSON.stringify(normalizedSchema),
       })
 
       if (response.status === 401) {
@@ -378,11 +389,20 @@ function App() {
         return
       }
 
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        setMessage(errorData.message || 'Gagal menyimpan perubahan ke server.')
+        return false
+      }
+
       const savedSchema = await response.json()
       safeSetSchema(savedSchema)
       setMessage('Perubahan event berhasil disimpan ke server.')
-    } catch {
+      return true
+    } catch (error) {
+      logError(error, { context: 'saveSchemaToServer' })
       setMessage('Gagal menyimpan perubahan ke server.')
+      return false
     } finally {
       setSaving(false)
     }
@@ -396,7 +416,7 @@ function App() {
     setSchema((current) => ({
       ...current,
       fields: [
-        ...current.fields,
+        ...ensureArray(current.fields),
         {
           id: crypto.randomUUID(),
           label: 'Field Baru',
@@ -412,7 +432,7 @@ function App() {
   function updateField(id, key, value) {
     setSchema((current) => ({
       ...current,
-      fields: current.fields.map((field) =>
+      fields: ensureArray(current.fields).map((field) =>
         field.id === id ? { ...field, [key]: value } : field,
       ),
     }))
@@ -421,7 +441,7 @@ function App() {
   function removeField(id) {
     setSchema((current) => ({
       ...current,
-      fields: current.fields.filter((field) => field.id !== id),
+      fields: ensureArray(current.fields).filter((field) => field.id !== id),
     }))
   }
 
@@ -429,7 +449,7 @@ function App() {
     setSchema((current) => ({
       ...current,
       highlights: [
-        ...current.highlights,
+        ...ensureArray(current.highlights),
         { label: 'Label Baru', value: 'Nilai Baru' },
       ],
     }))
@@ -438,7 +458,7 @@ function App() {
   function updateHighlight(index, key, value) {
     setSchema((current) => ({
       ...current,
-      highlights: current.highlights.map((highlight, i) =>
+      highlights: ensureArray(current.highlights).map((highlight, i) =>
         i === index ? { ...highlight, [key]: value } : highlight
       ),
     }))
@@ -447,7 +467,7 @@ function App() {
   function removeHighlight(index) {
     setSchema((current) => ({
       ...current,
-      highlights: current.highlights.filter((_, i) => i !== index),
+      highlights: ensureArray(current.highlights).filter((_, i) => i !== index),
     }))
   }
 
@@ -455,7 +475,7 @@ function App() {
     setSchema((current) => ({
       ...current,
       features: [
-        ...current.features,
+        ...ensureArray(current.features),
         { title: 'Fitur Baru', description: 'Deskripsi fitur baru.' },
       ],
     }))
@@ -464,7 +484,7 @@ function App() {
   function updateFeature(index, key, value) {
     setSchema((current) => ({
       ...current,
-      features: current.features.map((feature, i) =>
+      features: ensureArray(current.features).map((feature, i) =>
         i === index ? { ...feature, [key]: value } : feature
       ),
     }))
@@ -473,7 +493,7 @@ function App() {
   function removeFeature(index) {
     setSchema((current) => ({
       ...current,
-      features: current.features.filter((_, i) => i !== index),
+      features: ensureArray(current.features).filter((_, i) => i !== index),
     }))
   }
 
@@ -573,7 +593,7 @@ function App() {
 
   async function handleSaveAll() {
     setMessage('')
-    await saveSchemaToServer(schema)
+    await saveSchemaToServer(normalizeSchema(schema))
   }
 
   async function resetDemoData() {
@@ -745,7 +765,7 @@ function App() {
       } else {
         setMessage('Test email berhasil dikirim! Cek inbox Anda.')
       }
-    } catch (error) {
+    } catch {
       setMessage('Gagal mengirim test email. Pastikan konfigurasi sudah benar.')
     } finally {
       setSendingTestEmail(false)
