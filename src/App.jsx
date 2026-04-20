@@ -577,6 +577,7 @@ function App() {
 
     const newEntry = {
       answers: schema.fields.map((field) => ({
+        id: field.id,
         label: field.label,
         value:
           field.type === 'checkbox'
@@ -596,6 +597,26 @@ function App() {
           _formLoadedAt: formLoadedAt,
         }),
       })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        
+        // Handle duplicate submission (409 Conflict)
+        if (response.status === 409) {
+          window.alert(
+            '⚠️ Pendaftaran Gagal\n\n' +
+            errorData.message + '\n\n' +
+            'Jika Anda merasa ini adalah kesalahan, silakan hubungi panitia.'
+          )
+          setMessage(errorData.message)
+          return
+        }
+        
+        // Handle other errors
+        setMessage(errorData.message || 'Gagal mengirim pendaftaran.')
+        return
+      }
+      
       const savedEntry = await response.json()
       setSubmissions((current) => [savedEntry, ...current])
       setFormData({})

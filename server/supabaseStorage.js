@@ -306,6 +306,51 @@ export async function deleteSupabaseSubmission(id) {
 }
 
 /**
+ * Check for duplicate submission in Supabase based on email or phone
+ * Returns { field: 'email' | 'phone', submission } if duplicate found, null otherwise
+ * Optimized with targeted queries using normalized identity fields
+ */
+export async function checkSupabaseDuplicate(newSubmission) {
+  const client = getClient()
+  if (!client) throw new Error('Supabase client not available')
+
+  // Import functions from store.js
+  const { extractIdentity } = await import('./store.js')
+  
+  // Extract normalized identity from new submission
+  const newIdentity = extractIdentity(newSubmission)
+  
+  if (!newIdentity.email && !newIdentity.phone) {
+    return null
+  }
+  
+  // Query for duplicates using normalized identity fields
+  // This is much faster than fetching all submissions
+  const { data, error } = await client
+    .from('submissions')
+    .select('*')
+    .or(`identity_email.eq.${newIdentity.email},identity_phone.eq.${newIdentity.phone}`)
+  
+  if (error) throw error
+  
+  // Check if any matches found
+  if (data && data.length > 0) {
+    const existing = rowToSubmission(data[0])
+    const existingIdentity = extractIdentity(existing)
+    
+    // Determine which field matched
+    if (newIdentity.email && existingIdentity.email === newIdentity.email) {
+      return { field: 'email', submission: existing }
+    }
+    if (newIdentity.phone && existingIdentity.phone === newIdentity.phone) {
+      return { field: 'phone', submission: existing }
+    }
+  }
+  
+  return null
+}
+
+/**
  * Reset the database: delete all submissions and reset schema to initial data.
  * Uses atomic operations with error recovery.
  */

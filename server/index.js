@@ -11,15 +11,15 @@ import rateLimit from 'express-rate-limit'
 import { createAdminSessionToken, verifyAdminSessionToken } from './adminAuth.js'
 import { validateEventSchema, validateSubmission } from '../shared/validation.js'
 import {
+  getSubmissions,
   addSubmission,
   deleteSubmission,
   getSchema,
-  getStorageMode,
-  getSubmissions,
-  resetDb,
   saveSchema,
   getEmailConfig,
   saveEmailConfig,
+  checkDuplicateSubmission,
+  extractIdentity,
 } from './store.js'
 import { isR2StorageEnabled, uploadR2File } from './r2Storage.js'
 import { isSupabaseEnabled } from './supabaseStorage.js'
@@ -426,6 +426,27 @@ export function createApp() {
       submittedAt: now.toLocaleString('id-ID'),
       submittedAtIso: now.toISOString(),
       answers: req.body.answers,
+    }
+
+    // Extract and add normalized identity fields for efficient duplicate detection
+    const identity = extractIdentity(submission)
+    submission.identity_email = identity.email || null
+    submission.identity_phone = identity.phone || null
+
+    // Check for duplicate submission (fail-closed for safety)
+    try {
+      const duplicate = await checkDuplicateSubmission(submission)
+      if (duplicate) {
+        const fieldName = duplicate.field === 'email' ? 'Email' : 'Nomor WhatsApp'
+        return res.status(409).json({ 
+          message: `${fieldName} ini sudah terdaftar. Silakan gunakan ${fieldName.toLowerCase()} yang berbeda.` 
+        })
+      }
+    } catch (error) {
+      console.error('[API] Duplicate check failed:', error)
+      return res.status(503).json({ 
+        message: 'Sistem sedang mengalami gangguan. Silakan coba lagi dalam beberapa saat.' 
+      })
     }
 
     const savedSubmission = await addSubmission(submission)

@@ -9,6 +9,7 @@ import {
   addSupabaseSubmission,
   deleteSupabaseSubmission,
   resetSupabaseDb,
+  checkSupabaseDuplicate,
 } from './supabaseStorage.js'
 
 const dataDir = path.resolve('data')
@@ -132,4 +133,108 @@ export async function saveEmailConfig(emailConfig) {
   
   console.log('[store] Email config saved and verified successfully')
   return emailConfig
+}
+
+/**
+ * Normalize email for duplicate detection
+ */
+export function normalizeEmail(email) {
+  if (!email || typeof email !== 'string') return ''
+  return email.trim().toLowerCase()
+}
+
+/**
+ * Normalize phone number for duplicate detection
+ * Removes spaces, dashes, parentheses, and other common formatting
+ */
+export function normalizePhone(phone) {
+  if (!phone || typeof phone !== 'string') return ''
+  return phone.replace(/[\s\-()]/g, '')
+}
+
+/**
+ * Extract identity fields (email and phone) from submission answers
+ * Uses both field ID (stable) and label (fallback) for robustness
+ * Returns normalized values for duplicate detection
+ */
+export function extractIdentity(submission) {
+  const answers = submission.answers || []
+  
+  // Try to find by common field IDs first (stable identifier)
+  let emailAnswer = answers.find(a => a.id === 'email')
+  let phoneAnswer = answers.find(a => a.id === 'phone' || a.id === 'whatsapp')
+  
+  // Fallback to label-based detection if field ID not found
+  if (!emailAnswer) {
+    emailAnswer = answers.find(a => 
+      a.label && (a.label.toLowerCase().includes('email') || a.label === 'Email')
+    )
+  }
+  
+  if (!phoneAnswer) {
+    phoneAnswer = answers.find(a => 
+      a.label && (
+        a.label.toLowerCase().includes('whatsapp') || 
+        a.label.toLowerCase().includes('phone') ||
+        a.label === 'Nomor WhatsApp'
+      )
+    )
+  }
+  
+  return {
+    email: emailAnswer ? normalizeEmail(emailAnswer.value) : '',
+    phone: phoneAnswer ? normalizePhone(phoneAnswer.value) : '',
+  }
+}
+
+/**
+ * Find duplicate submission based on email or phone
+ * Returns { field: 'email' | 'phone', submission } if duplicate found, null otherwise
+ */
+export function findDuplicateSubmission(existingSubmissions, newSubmission) {
+  const newIdentity = extractIdentity(newSubmission)
+  
+  if (!newIdentity.email && !newIdentity.phone) {
+    return null
+  }
+  
+  for (const existing of existingSubmissions) {
+    const existingIdentity = extractIdentity(existing)
+    
+    // Check email match
+    if (newIdentity.email && existingIdentity.email && 
+        newIdentity.email === existingIdentity.email) {
+      return { field: 'email', submission: existing }
+    }
+    
+    // Check phone match
+    if (newIdentity.phone && existingIdentity.phone && 
+        newIdentity.phone === existingIdentity.phone) {
+      return { field: 'phone', submission: existing }
+    }
+  }
+  
+  return null
+}
+
+/**
+ * Check for duplicate submission before adding
+ * Routes to appropriate storage backend (Supabase or local file)
+ * Throws error if duplicate check fails (fail-closed for safety)
+ */
+export async function checkDuplicateSubmission(newSubmission) {
+  try {
+    if (isSupabaseEnabled()) {
+      // Use Supabase-specific duplicate check for better performance
+      return await checkSupabaseDuplicate(newSubmission)
+    } else {
+      // Use local file-based duplicate check
+      const existingSubmissions = await getSubmissions()
+      return findDuplicateSubmission(existingSubmissions, newSubmission)
+    }
+  } catch (error) {
+    console.error('[store] checkDuplicateSubmission error:', error)
+    // Fail-closed: throw error instead of allowing submission
+    throw new Error('Gagal memvalidasi pendaftaran. Silakan coba lagi.')
+  }
 }
