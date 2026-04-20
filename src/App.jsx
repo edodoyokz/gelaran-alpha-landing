@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Lottie from 'lottie-react'
-import runnerAnimation from './assets/runner.json'
+import { PulseLoader } from 'react-spinners'
 import './index.css'
 import { logError } from './errorTracker.js'
 
@@ -881,11 +880,7 @@ function App() {
   if (loading) {
     return (
       <div className="loading-screen" role="status" aria-live="polite">
-        <Lottie 
-          animationData={runnerAnimation} 
-          loop={true}
-          style={{ width: 200, height: 200 }}
-        />
+        <PulseLoader color="#ef7b45" size={15} margin={8} />
         <div className="loading-text">
           <h2>Sedang memuat</h2>
           <p>Menyiapkan pengalaman event...</p>
