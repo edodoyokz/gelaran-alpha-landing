@@ -880,15 +880,8 @@ function App() {
   if (loading) {
     return (
       <div className="loading-screen" role="status" aria-live="polite">
-        <div className="runner-animation">
-          <div className="runner-body">
-            <div className="runner-head"></div>
-            <div className="runner-torso"></div>
-            <div className="runner-arm runner-arm-left"></div>
-            <div className="runner-arm runner-arm-right"></div>
-            <div className="runner-leg runner-leg-left"></div>
-            <div className="runner-leg runner-leg-right"></div>
-          </div>
+        <div className="runner-track">
+          <div className="runner-icon">🏃</div>
         </div>
         <div className="loading-text">
           <h2>Sedang memuat</h2>
