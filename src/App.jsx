@@ -880,7 +880,16 @@ function App() {
   if (loading) {
     return (
       <div className="loading-screen" role="status" aria-live="polite">
-        <PulseLoader color="#ef7b45" size={15} margin={8} />
+        <div className="runner-animation">
+          <div className="runner-body">
+            <div className="runner-head"></div>
+            <div className="runner-torso"></div>
+            <div className="runner-arm runner-arm-left"></div>
+            <div className="runner-arm runner-arm-right"></div>
+            <div className="runner-leg runner-leg-left"></div>
+            <div className="runner-leg runner-leg-right"></div>
+          </div>
+        </div>
         <div className="loading-text">
           <h2>Sedang memuat</h2>
           <p>Menyiapkan pengalaman event...</p>
