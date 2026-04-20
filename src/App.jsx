@@ -877,7 +877,24 @@ function App() {
   }
 
   if (loading) {
-    return <div className="loading-screen">Memuat webapp event...</div>
+    return (
+      <div className="loading-screen" role="status" aria-live="polite">
+        <div className="runner-container">
+          <div className="runner">
+            <div className="runner-head"></div>
+            <div className="runner-body"></div>
+            <div className="runner-arm runner-arm-left"></div>
+            <div className="runner-arm runner-arm-right"></div>
+            <div className="runner-leg runner-leg-left"></div>
+            <div className="runner-leg runner-leg-right"></div>
+          </div>
+        </div>
+        <div className="loading-text">
+          <h2>Sedang memuat<span className="loading-dots"></span></h2>
+          <p>Menyiapkan pengalaman event...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
