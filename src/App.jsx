@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { PulseLoader } from 'react-spinners'
 import './index.css'
 import { logError } from './errorTracker.js'
 
@@ -879,18 +880,9 @@ function App() {
   if (loading) {
     return (
       <div className="loading-screen" role="status" aria-live="polite">
-        <div className="runner-container">
-          <div className="runner">
-            <div className="runner-head"></div>
-            <div className="runner-body"></div>
-            <div className="runner-arm runner-arm-left"></div>
-            <div className="runner-arm runner-arm-right"></div>
-            <div className="runner-leg runner-leg-left"></div>
-            <div className="runner-leg runner-leg-right"></div>
-          </div>
-        </div>
+        <PulseLoader color="#ef7b45" size={15} margin={8} />
         <div className="loading-text">
-          <h2>Sedang memuat<span className="loading-dots"></span></h2>
+          <h2>Sedang memuat</h2>
           <p>Menyiapkan pengalaman event...</p>
         </div>
       </div>
