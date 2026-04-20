@@ -20,6 +20,7 @@
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.2",
+    "lottie-react": "^2.4.1",
     "multer": "^2.1.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
