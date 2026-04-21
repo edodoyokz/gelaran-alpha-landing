@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { defaultSchema } from './defaultSchema.js'
+import { generateVoucherCode } from './voucherService.js'
 import {
   isSupabaseEnabled,
   getSupabaseSchema,
@@ -49,6 +50,9 @@ export function normalizeSubmission(submission) {
     ...submission,
     paymentStatus: submission.paymentStatus || 'registered',
     paymentConfirmedAt: submission.paymentConfirmedAt || null,
+    voucherCode: submission.voucherCode || null,
+    voucherSentAt: submission.voucherSentAt || null,
+    voucherLastSentAt: submission.voucherLastSentAt || null,
   }
 }
 
@@ -126,6 +130,34 @@ export async function updateSubmissionPaymentStatus(submissionId, paymentStatus)
 
   submission.paymentStatus = paymentStatus
   submission.paymentConfirmedAt = paymentStatus === 'paid' ? new Date().toISOString() : null
+  
+  // Generate voucher code when status changes to paid
+  if (paymentStatus === 'paid' && !submission.voucherCode) {
+    submission.voucherCode = generateVoucherCode(submissionId)
+  }
+  
+  writeLocalDb(data)
+  return normalizeSubmission(submission)
+}
+
+export async function updateSubmissionVoucherSent(submissionId) {
+  if (isSupabaseEnabled()) {
+    const { updateSupabaseSubmissionVoucherSent } = await import('./supabaseStorage.js')
+    return updateSupabaseSubmissionVoucherSent(submissionId)
+  }
+
+  const data = readLocalDb()
+  const submission = data.submissions.find((s) => s.id === submissionId)
+  
+  if (!submission) {
+    return null
+  }
+
+  const now = new Date().toISOString()
+  if (!submission.voucherSentAt) {
+    submission.voucherSentAt = now
+  }
+  submission.voucherLastSentAt = now
   
   writeLocalDb(data)
   return normalizeSubmission(submission)

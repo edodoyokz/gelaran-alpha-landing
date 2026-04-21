@@ -729,7 +729,7 @@ function App() {
       setSubmissions((current) =>
         current.map((sub) =>
           sub.id === submissionId
-            ? { ...sub, paymentStatus: 'paid', paymentConfirmedAt: data.paymentConfirmedAt }
+            ? { ...sub, paymentStatus: 'paid', paymentConfirmedAt: data.paymentConfirmedAt, voucherCode: data.voucherCode }
             : sub
         )
       )
@@ -740,12 +740,40 @@ function App() {
           ...selectedParticipant,
           paymentStatus: 'paid',
           paymentConfirmedAt: data.paymentConfirmedAt,
+          voucherCode: data.voucherCode,
         })
       }
 
       setMessage('Status pembayaran berhasil diupdate menjadi Lunas.')
     } catch {
       setMessage('Gagal mengupdate status pembayaran.')
+    }
+  }
+
+  async function resendVoucher(submissionId) {
+    if (!submissionId) return
+
+    const shouldResend = window.confirm('Kirim ulang e-voucher ke email peserta?')
+    if (!shouldResend) return
+
+    try {
+      const response = await apiFetch(`/api/submissions/${submissionId}/resend-evoucher`, {
+        method: 'POST',
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        setMessage(data.message || 'Gagal mengirim ulang e-voucher.')
+        return
+      }
+
+      const data = await response.json()
+      setMessage(data.message || 'E-voucher berhasil dikirim ulang.')
+      
+      // Reload admin data to get updated voucher sent timestamps
+      await loadAdminData()
+    } catch {
+      setMessage('Gagal mengirim ulang e-voucher.')
     }
   }
 
@@ -1613,6 +1641,30 @@ function App() {
                                   )}
                                 </span>
                               </div>
+                              {selectedParticipant.paymentStatus === 'paid' && selectedParticipant.voucherCode && (
+                                <>
+                                  <div className="participant-detail-row">
+                                    <span className="detail-label">Kode Voucher:</span>
+                                    <span className="detail-value">
+                                      <strong>{selectedParticipant.voucherCode}</strong>
+                                    </span>
+                                  </div>
+                                  {selectedParticipant.voucherSentAt && (
+                                    <div className="participant-detail-row">
+                                      <span className="detail-label">E-voucher Terkirim:</span>
+                                      <span className="detail-value">
+                                        {new Date(selectedParticipant.voucherSentAt).toLocaleString('id-ID')}
+                                        {selectedParticipant.voucherLastSentAt && 
+                                         selectedParticipant.voucherLastSentAt !== selectedParticipant.voucherSentAt && (
+                                          <small style={{ marginLeft: '8px', color: '#666' }}>
+                                            (Terakhir dikirim: {new Date(selectedParticipant.voucherLastSentAt).toLocaleString('id-ID')})
+                                          </small>
+                                        )}
+                                      </span>
+                                    </div>
+                                  )}
+                                </>
+                              )}
                               <hr className="detail-divider" />
                               <h4 className="detail-section-title">Data Peserta</h4>
                               {selectedParticipant.answers.map((answer, idx) => (
@@ -1641,6 +1693,14 @@ function App() {
                                   onClick={() => markAsPaid(selectedParticipant.id)}
                                 >
                                   Tandai Lunas
+                                </button>
+                              )}
+                              {selectedParticipant.paymentStatus === 'paid' && selectedParticipant.voucherCode && (
+                                <button 
+                                  className="primary-btn" 
+                                  onClick={() => resendVoucher(selectedParticipant.id)}
+                                >
+                                  Kirim Ulang E-voucher
                                 </button>
                               )}
                               <button 

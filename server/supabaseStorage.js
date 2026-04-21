@@ -69,6 +69,9 @@ function rowToSubmission(row) {
     answers: row.answers,
     paymentStatus: row.payment_status || 'registered',
     paymentConfirmedAt: row.payment_confirmed_at || null,
+    voucherCode: row.voucher_code || null,
+    voucherSentAt: row.voucher_sent_at || null,
+    voucherLastSentAt: row.voucher_last_sent_at || null,
   }
 }
 
@@ -81,6 +84,9 @@ function submissionToRow(submission) {
     submitted_at_locale: submission.submittedAt || new Date().toLocaleString(),
     payment_status: submission.paymentStatus || 'registered',
     payment_confirmed_at: submission.paymentConfirmedAt || null,
+    voucher_code: submission.voucherCode || null,
+    voucher_sent_at: submission.voucherSentAt || null,
+    voucher_last_sent_at: submission.voucherLastSentAt || null,
   }
 }
 
@@ -319,13 +325,34 @@ export async function updateSupabaseSubmissionPaymentStatus(id, paymentStatus) {
     if (!client) return null
 
     const paymentConfirmedAt = paymentStatus === 'paid' ? new Date().toISOString() : null
+    
+    // Generate voucher code when status changes to paid
+    const { generateVoucherCode } = await import('./voucherService.js')
+    let voucherCode = null
+    
+    // First, get the current submission to check if it already has a voucher code
+    const { data: currentData } = await client
+      .from('submissions')
+      .select('voucher_code')
+      .eq('id', id)
+      .single()
+    
+    if (paymentStatus === 'paid' && (!currentData || !currentData.voucher_code)) {
+      voucherCode = generateVoucherCode(id)
+    }
+
+    const updateData = {
+      payment_status: paymentStatus,
+      payment_confirmed_at: paymentConfirmedAt,
+    }
+    
+    if (voucherCode) {
+      updateData.voucher_code = voucherCode
+    }
 
     const { data, error } = await client
       .from('submissions')
-      .update({
-        payment_status: paymentStatus,
-        payment_confirmed_at: paymentConfirmedAt,
-      })
+      .update(updateData)
       .eq('id', id)
       .select()
       .single()
@@ -336,6 +363,45 @@ export async function updateSupabaseSubmissionPaymentStatus(id, paymentStatus) {
     return rowToSubmission(data)
   } catch (err) {
     console.error('[supabaseStorage] updateSupabaseSubmissionPaymentStatus error:', err)
+    return null
+  }
+}
+
+export async function updateSupabaseSubmissionVoucherSent(id) {
+  try {
+    const client = getClient()
+    if (!client) return null
+
+    const now = new Date().toISOString()
+    
+    // Get current voucher_sent_at to determine if this is first send
+    const { data: currentData } = await client
+      .from('submissions')
+      .select('voucher_sent_at')
+      .eq('id', id)
+      .single()
+    
+    const updateData = {
+      voucher_last_sent_at: now,
+    }
+    
+    if (!currentData || !currentData.voucher_sent_at) {
+      updateData.voucher_sent_at = now
+    }
+
+    const { data, error } = await client
+      .from('submissions')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+    if (!data) return null
+
+    return rowToSubmission(data)
+  } catch (err) {
+    console.error('[supabaseStorage] updateSupabaseSubmissionVoucherSent error:', err)
     return null
   }
 }

@@ -1,4 +1,5 @@
 import { Resend } from 'resend'
+import { generateVoucherCode, generateQRPayload, generateQRCodeDataURL, generateEVoucherHTML } from './voucherService.js'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
@@ -343,6 +344,130 @@ export async function sendAdminNotification(emailConfig, eventData, submissionDa
     })
   } catch (error) {
     console.error('Failed to send admin email:', error)
+    return { error: true, message: error.message }
+  }
+}
+
+export async function sendPaymentConfirmedVoucherEmail(emailConfig, eventData, submissionData) {
+  const config = mergeEmailConfig(emailConfig, eventData)
+
+  if (!config.enabled) {
+    return { skipped: true, reason: 'Email disabled' }
+  }
+
+  const resendClient = config.resendApiKey ? new Resend(config.resendApiKey) : resend
+  if (!resendClient) {
+    return { skipped: true, reason: 'Resend client not initialized' }
+  }
+
+  const participantEmail = submissionData.email || submissionData['email'] || null
+  if (!participantEmail) {
+    return { skipped: true, reason: 'Participant email not found in submission data' }
+  }
+
+  const participantName = submissionData['full-name'] || submissionData.name || 'Peserta'
+  const voucherCode = submissionData.voucherCode || generateVoucherCode(submissionData.id)
+
+  // Generate QR code
+  const qrPayload = generateQRPayload(eventData.eventName, submissionData.id, voucherCode)
+  let qrCodeDataURL
+  try {
+    qrCodeDataURL = await generateQRCodeDataURL(qrPayload)
+  } catch (error) {
+    console.error('Failed to generate QR code:', error)
+    return { error: true, message: 'Failed to generate QR code' }
+  }
+
+  // Generate e-voucher HTML for attachment
+  const eVoucherHTML = generateEVoucherHTML({
+    eventName: eventData.eventName,
+    eventDate: eventData.date,
+    eventLocation: eventData.location,
+    participantName,
+    voucherCode,
+    qrCodeDataURL,
+  })
+
+  // Email subject and body
+  const subject = `Pembayaran Terkonfirmasi - ${eventData.eventName}`
+  const emailBody = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f3f4f6;">
+  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
+      <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">Pembayaran Terkonfirmasi!</h1>
+    </div>
+    <div style="padding: 40px 30px;">
+      <p style="margin: 0 0 20px 0; color: #374151; font-size: 16px; line-height: 1.7;">
+        Halo <strong>${participantName}</strong>,
+      </p>
+      <p style="margin: 0 0 20px 0; color: #374151; font-size: 16px; line-height: 1.7;">
+        Pembayaran Anda untuk <strong>${eventData.eventName}</strong> telah dikonfirmasi oleh admin. Berikut adalah e-voucher Anda:
+      </p>
+      <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <div style="text-align: center; margin-bottom: 16px;">
+          <span style="display: inline-block; background: #10b981; color: white; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 600;">✓ LUNAS</span>
+        </div>
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Nama Peserta</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600; text-align: right;">${participantName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Kode Voucher</td>
+            <td style="padding: 8px 0; color: #667eea; font-size: 16px; font-weight: 700; text-align: right; letter-spacing: 1px;">${voucherCode}</td>
+          </tr>
+          ${eventData.date ? `<tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Tanggal Event</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600; text-align: right;">${eventData.date}</td>
+          </tr>` : ''}
+          ${eventData.location ? `<tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Lokasi</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600; text-align: right;">${eventData.location}</td>
+          </tr>` : ''}
+        </table>
+      </div>
+      <div style="text-align: center; padding: 30px 0; background: #f9fafb; margin: 20px -30px;">
+        <h3 style="font-size: 16px; color: #374151; margin: 0 0 16px 0;">Scan QR Code saat Check-in</h3>
+        <div style="display: inline-block; padding: 16px; background: white; border-radius: 8px;">
+          <img src="${qrCodeDataURL}" alt="QR Code" width="250" height="250" style="display: block;" />
+        </div>
+      </div>
+      <p style="margin: 20px 0 0 0; color: #374151; font-size: 14px; line-height: 1.7;">
+        E-voucher lengkap juga dilampirkan pada email ini. Simpan e-voucher dan tunjukkan saat check-in event.
+      </p>
+    </div>
+    <div style="background: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+      <p style="margin: 0; color: #6b7280; font-size: 14px; line-height: 1.6;">
+        Jika ada pertanyaan, silakan hubungi panitia.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+  `.trim()
+
+  try {
+    return await resendClient.emails.send({
+      from: `${config.fromName} <${config.fromEmail}>`,
+      to: participantEmail,
+      replyTo: config.replyTo,
+      subject,
+      html: emailBody,
+      attachments: [
+        {
+          filename: `evoucher-${voucherCode}.html`,
+          content: Buffer.from(eVoucherHTML).toString('base64'),
+        },
+      ],
+    })
+  } catch (error) {
+    console.error('Failed to send payment confirmed voucher email:', error)
     return { error: true, message: error.message }
   }
 }
