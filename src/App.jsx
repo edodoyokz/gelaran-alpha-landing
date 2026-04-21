@@ -197,6 +197,7 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [formLoadedAt] = useState(() => Date.now())
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isUpdatingPayment, setIsUpdatingPayment] = useState(false)
    const [saving, setSaving] = useState(false)
    const [uploadingPoster, setUploadingPoster] = useState(false)
    const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false)
@@ -715,7 +716,12 @@ function App() {
   async function markAsPaid(submissionId) {
     if (!submissionId) return
 
+    // Prevent double click while request is in flight
+    if (isUpdatingPayment) return
+
     try {
+      setIsUpdatingPayment(true)
+      
       const response = await apiFetch(`/api/submissions/${submissionId}/payment-status`, {
         method: 'PATCH',
         body: JSON.stringify({ paymentStatus: 'paid' }),
@@ -751,6 +757,8 @@ function App() {
       setMessage('Status pembayaran berhasil diupdate menjadi Lunas.')
     } catch {
       setMessage('Gagal mengupdate status pembayaran.')
+    } finally {
+      setIsUpdatingPayment(false)
     }
   }
 
@@ -1709,8 +1717,9 @@ function App() {
                                 <button 
                                   className="primary-btn" 
                                   onClick={() => markAsPaid(selectedParticipant.id)}
+                                  disabled={isUpdatingPayment}
                                 >
-                                  Tandai Lunas
+                                  {isUpdatingPayment ? 'Memproses...' : 'Tandai Lunas'}
                                 </button>
                               )}
                               {selectedParticipant.paymentStatus === 'paid' && selectedParticipant.voucherCode && (
