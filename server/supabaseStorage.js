@@ -67,6 +67,8 @@ function rowToSubmission(row) {
     submittedAt: row.submitted_at_locale,
     submittedAtIso: row.submitted_at,
     answers: row.answers,
+    paymentStatus: row.payment_status || 'registered',
+    paymentConfirmedAt: row.payment_confirmed_at || null,
   }
 }
 
@@ -77,6 +79,8 @@ function submissionToRow(submission) {
     answers: submission.answers ?? [],
     submitted_at: submission.submittedAtIso || new Date().toISOString(),
     submitted_at_locale: submission.submittedAt || new Date().toLocaleString(),
+    payment_status: submission.paymentStatus || 'registered',
+    payment_confirmed_at: submission.paymentConfirmedAt || null,
   }
 }
 
@@ -302,6 +306,37 @@ export async function deleteSupabaseSubmission(id) {
   } catch (err) {
     console.error('[supabaseStorage] deleteSupabaseSubmission error:', err)
     return false
+  }
+}
+
+/**
+ * Update payment status of a submission by id.
+ * Returns the updated submission or null if not found.
+ */
+export async function updateSupabaseSubmissionPaymentStatus(id, paymentStatus) {
+  try {
+    const client = getClient()
+    if (!client) return null
+
+    const paymentConfirmedAt = paymentStatus === 'paid' ? new Date().toISOString() : null
+
+    const { data, error } = await client
+      .from('submissions')
+      .update({
+        payment_status: paymentStatus,
+        payment_confirmed_at: paymentConfirmedAt,
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+    if (!data) return null
+
+    return rowToSubmission(data)
+  } catch (err) {
+    console.error('[supabaseStorage] updateSupabaseSubmissionPaymentStatus error:', err)
+    return null
   }
 }
 

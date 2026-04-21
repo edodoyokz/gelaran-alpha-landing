@@ -12,6 +12,14 @@ Setiap submission sekarang menyimpan 2 field tambahan:
 
 Field ini digunakan untuk duplicate detection yang cepat dan konsisten.
 
+## Payment Status Fields
+
+Setiap submission juga menyimpan 2 field untuk tracking status pembayaran:
+- `payment_status`: Status pembayaran ('registered' atau 'paid')
+- `payment_confirmed_at`: Timestamp ISO 8601 saat pembayaran dikonfirmasi (null jika belum dibayar)
+
+Field ini digunakan untuk tracking pembayaran peserta di admin dashboard.
+
 ## Setup Database Constraint (Recommended)
 
 ### 1. Tambahkan Kolom di Supabase
@@ -24,6 +32,11 @@ ALTER TABLE submissions
 ADD COLUMN IF NOT EXISTS identity_email TEXT,
 ADD COLUMN IF NOT EXISTS identity_phone TEXT;
 
+-- Tambahkan kolom payment status
+ALTER TABLE submissions
+ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'registered',
+ADD COLUMN IF NOT EXISTS payment_confirmed_at TIMESTAMPTZ;
+
 -- Buat index untuk performa query
 CREATE INDEX IF NOT EXISTS idx_submissions_identity_email 
 ON submissions(identity_email) 
@@ -32,6 +45,9 @@ WHERE identity_email IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_submissions_identity_phone 
 ON submissions(identity_phone) 
 WHERE identity_phone IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_submissions_payment_status
+ON submissions(payment_status);
 
 -- Tambahkan unique constraint untuk mencegah duplicate
 -- Note: Gunakan salah satu strategi di bawah sesuai kebutuhan

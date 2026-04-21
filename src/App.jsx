@@ -708,6 +708,47 @@ function App() {
     setSelectedParticipant(null)
   }
 
+  async function markAsPaid(submissionId) {
+    if (!submissionId) return
+
+    try {
+      const response = await apiFetch(`/api/submissions/${submissionId}/payment-status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ paymentStatus: 'paid' }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        setMessage(data.message || 'Gagal mengupdate status pembayaran.')
+        return
+      }
+
+      const data = await response.json()
+      
+      // Update submissions list
+      setSubmissions((current) =>
+        current.map((sub) =>
+          sub.id === submissionId
+            ? { ...sub, paymentStatus: 'paid', paymentConfirmedAt: data.paymentConfirmedAt }
+            : sub
+        )
+      )
+
+      // Update selected participant if modal is open
+      if (selectedParticipant?.id === submissionId) {
+        setSelectedParticipant({
+          ...selectedParticipant,
+          paymentStatus: 'paid',
+          paymentConfirmedAt: data.paymentConfirmedAt,
+        })
+      }
+
+      setMessage('Status pembayaran berhasil diupdate menjadi Lunas.')
+    } catch {
+      setMessage('Gagal mengupdate status pembayaran.')
+    }
+  }
+
   function exportCsv() {
     const params = new URLSearchParams({
       query: debouncedSubmissionQuery,
@@ -1559,6 +1600,19 @@ function App() {
                                    new Date(selectedParticipant.submittedAtIso).toLocaleString('id-ID')}
                                 </span>
                               </div>
+                              <div className="participant-detail-row">
+                                <span className="detail-label">Status Pembayaran:</span>
+                                <span className="detail-value">
+                                  <span className={`payment-badge ${selectedParticipant.paymentStatus === 'paid' ? 'paid' : 'registered'}`}>
+                                    {selectedParticipant.paymentStatus === 'paid' ? 'Lunas' : 'Terdaftar'}
+                                  </span>
+                                  {selectedParticipant.paymentStatus === 'paid' && selectedParticipant.paymentConfirmedAt && (
+                                    <small style={{ marginLeft: '8px', color: '#666' }}>
+                                      Dikonfirmasi: {new Date(selectedParticipant.paymentConfirmedAt).toLocaleString('id-ID')}
+                                    </small>
+                                  )}
+                                </span>
+                              </div>
                               <hr className="detail-divider" />
                               <h4 className="detail-section-title">Data Peserta</h4>
                               {selectedParticipant.answers.map((answer, idx) => (
@@ -1580,13 +1634,23 @@ function App() {
                             >
                               Tutup
                             </button>
-                            <button 
-                              className="delete-btn" 
-                              onClick={() => deleteSubmissionById(selectedParticipant.id)}
-                              disabled={deletingSubmissionId === selectedParticipant.id}
-                            >
-                              {deletingSubmissionId === selectedParticipant.id ? 'Menghapus...' : 'Hapus Peserta'}
-                            </button>
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                              {selectedParticipant.paymentStatus !== 'paid' && (
+                                <button 
+                                  className="primary-btn" 
+                                  onClick={() => markAsPaid(selectedParticipant.id)}
+                                >
+                                  Tandai Lunas
+                                </button>
+                              )}
+                              <button 
+                                className="delete-btn" 
+                                onClick={() => deleteSubmissionById(selectedParticipant.id)}
+                                disabled={deletingSubmissionId === selectedParticipant.id}
+                              >
+                                {deletingSubmissionId === selectedParticipant.id ? 'Menghapus...' : 'Hapus Peserta'}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>

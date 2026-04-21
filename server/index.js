@@ -14,6 +14,7 @@ import {
   getSubmissions,
   addSubmission,
   deleteSubmission,
+  updateSubmissionPaymentStatus,
   getSchema,
   saveSchema,
   getEmailConfig,
@@ -392,6 +393,26 @@ export function createApp() {
     res.json({ success: true })
   })
 
+  app.patch('/api/submissions/:id/payment-status', requireAdmin, csrf.validateToken, async (req, res) => {
+    if (!ensureStorageInVercel(res)) return
+    
+    const { paymentStatus } = req.body
+    
+    if (!paymentStatus || !['registered', 'paid'].includes(paymentStatus)) {
+      res.status(400).json({ message: 'Status pembayaran tidak valid.' })
+      return
+    }
+
+    const updated = await updateSubmissionPaymentStatus(req.params.id, paymentStatus)
+
+    if (!updated) {
+      res.status(404).json({ message: 'Data peserta tidak ditemukan.' })
+      return
+    }
+
+    res.json(updated)
+  })
+
   app.post('/api/submissions', submissionRateLimit, async (req, res) => {
     if (!ensureStorageInVercel(res)) return
 
@@ -426,6 +447,8 @@ export function createApp() {
       submittedAt: now.toLocaleString('id-ID'),
       submittedAtIso: now.toISOString(),
       answers: req.body.answers,
+      paymentStatus: 'registered',
+      paymentConfirmedAt: null,
     }
 
     // Extract and add normalized identity fields for efficient duplicate detection

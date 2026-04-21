@@ -40,6 +40,18 @@ function writeLocalDb(data) {
   fs.writeFileSync(dbPath, JSON.stringify(data, null, 2))
 }
 
+/**
+ * Normalize submission to ensure payment status fields exist
+ * Provides backward compatibility for submissions without payment status
+ */
+export function normalizeSubmission(submission) {
+  return {
+    ...submission,
+    paymentStatus: submission.paymentStatus || 'registered',
+    paymentConfirmedAt: submission.paymentConfirmedAt || null,
+  }
+}
+
 export async function getSchema() {
   if (isSupabaseEnabled()) {
     return getSupabaseSchema(defaultSchema)
@@ -61,21 +73,25 @@ export async function saveSchema(schema) {
 
 export async function getSubmissions() {
   if (isSupabaseEnabled()) {
-    return getSupabaseSubmissions()
+    const submissions = await getSupabaseSubmissions()
+    return submissions.map(normalizeSubmission)
   }
 
-  return readLocalDb().submissions
+  const submissions = readLocalDb().submissions
+  return submissions.map(normalizeSubmission)
 }
 
 export async function addSubmission(submission) {
+  const normalized = normalizeSubmission(submission)
+  
   if (isSupabaseEnabled()) {
-    return addSupabaseSubmission(submission)
+    return addSupabaseSubmission(normalized)
   }
 
   const data = readLocalDb()
-  data.submissions.unshift(submission)
+  data.submissions.unshift(normalized)
   writeLocalDb(data)
-  return submission
+  return normalized
 }
 
 export async function deleteSubmission(submissionId) {
@@ -93,6 +109,26 @@ export async function deleteSubmission(submissionId) {
   writeLocalDb(data)
 
   return deleted
+}
+
+export async function updateSubmissionPaymentStatus(submissionId, paymentStatus) {
+  if (isSupabaseEnabled()) {
+    const { updateSupabaseSubmissionPaymentStatus } = await import('./supabaseStorage.js')
+    return updateSupabaseSubmissionPaymentStatus(submissionId, paymentStatus)
+  }
+
+  const data = readLocalDb()
+  const submission = data.submissions.find((s) => s.id === submissionId)
+  
+  if (!submission) {
+    return null
+  }
+
+  submission.paymentStatus = paymentStatus
+  submission.paymentConfirmedAt = paymentStatus === 'paid' ? new Date().toISOString() : null
+  
+  writeLocalDb(data)
+  return normalizeSubmission(submission)
 }
 
 export async function resetDb() {

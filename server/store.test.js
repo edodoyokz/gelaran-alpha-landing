@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert'
-import { normalizeEmail, normalizePhone, findDuplicateSubmission } from './store.js'
+import { normalizeEmail, normalizePhone, findDuplicateSubmission, normalizeSubmission } from './store.js'
 
 test('normalizeEmail - converts to lowercase and trims', () => {
   assert.strictEqual(normalizeEmail('  Test@Example.COM  '), 'test@example.com')
@@ -80,4 +80,25 @@ test('findDuplicateSubmission - allows unique submissions', () => {
 
   const duplicate = findDuplicateSubmission(submissions, newSubmission)
   assert.strictEqual(duplicate, null, 'Should allow unique submission')
+})
+
+test('normalizeSubmission - defaults missing payment status to registered', () => {
+  const submission = { id: '1', answers: [] }
+  const normalized = normalizeSubmission(submission)
+
+  assert.strictEqual(normalized.paymentStatus, 'registered')
+  assert.strictEqual(normalized.paymentConfirmedAt, null)
+})
+
+test('normalizeSubmission - preserves explicit paid status', () => {
+  const submission = { 
+    id: '1', 
+    answers: [], 
+    paymentStatus: 'paid',
+    paymentConfirmedAt: '2026-04-21T00:00:00.000Z'
+  }
+  const normalized = normalizeSubmission(submission)
+
+  assert.strictEqual(normalized.paymentStatus, 'paid')
+  assert.strictEqual(normalized.paymentConfirmedAt, '2026-04-21T00:00:00.000Z')
 })
