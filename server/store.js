@@ -42,8 +42,8 @@ function writeLocalDb(data) {
 }
 
 /**
- * Normalize submission to ensure payment status fields exist
- * Provides backward compatibility for submissions without payment status
+ * Normalize submission to ensure payment status and check-in fields exist
+ * Provides backward compatibility for submissions without these fields
  */
 export function normalizeSubmission(submission) {
   return {
@@ -53,6 +53,8 @@ export function normalizeSubmission(submission) {
     voucherCode: submission.voucherCode || null,
     voucherSentAt: submission.voucherSentAt || null,
     voucherLastSentAt: submission.voucherLastSentAt || null,
+    checkInStatus: submission.checkInStatus || 'not_checked_in',
+    checkedInAt: submission.checkedInAt || null,
   }
 }
 
@@ -160,7 +162,61 @@ export async function updateSubmissionVoucherSent(submissionId) {
   submission.voucherLastSentAt = now
   
   writeLocalDb(data)
+  
+  // Return normalized submission with updated timestamps
+  const normalized = normalizeSubmission(submission)
+  return {
+    ...normalized,
+    voucherSentAt: submission.voucherSentAt,
+    voucherLastSentAt: submission.voucherLastSentAt
+  }
+}
+
+export async function updateSubmissionCheckInStatus(submissionId) {
+  if (isSupabaseEnabled()) {
+    const { updateSupabaseSubmissionCheckInStatus } = await import('./supabaseStorage.js')
+    return updateSupabaseSubmissionCheckInStatus(submissionId)
+  }
+
+  const data = readLocalDb()
+  const submission = data.submissions.find((s) => s.id === submissionId)
+  
+  if (!submission) {
+    return null
+  }
+
+  submission.checkInStatus = 'checked_in'
+  submission.checkedInAt = new Date().toISOString()
+  
+  writeLocalDb(data)
   return normalizeSubmission(submission)
+}
+
+export async function findSubmissionByScanValue(scanValue) {
+  if (isSupabaseEnabled()) {
+    const { findSupabaseSubmissionByScanValue } = await import('./supabaseStorage.js')
+    return findSupabaseSubmissionByScanValue(scanValue)
+  }
+
+  const data = readLocalDb()
+  const parsed = parseScanValue(scanValue)
+  
+  // Try each candidate in order until we find a match
+  for (const candidate of parsed.candidates) {
+    // Try voucher code first (primary QR payload)
+    let submission = data.submissions.find((s) => s.voucherCode === candidate)
+    
+    // Fallback to submission ID
+    if (!submission) {
+      submission = data.submissions.find((s) => s.id === candidate)
+    }
+    
+    if (submission) {
+      return normalizeSubmission(submission)
+    }
+  }
+  
+  return null
 }
 
 export async function resetDb() {
@@ -314,5 +370,67 @@ export async function checkDuplicateSubmission(newSubmission) {
     console.error('[store] checkDuplicateSubmission error:', error)
     // Fail-closed: throw error instead of allowing submission
     throw new Error('Gagal memvalidasi pendaftaran. Silakan coba lagi.')
+  }
+}
+
+/**
+ * Parse scan value to extract potential identifiers for lookup
+ * Supports multiple QR payload formats:
+ * - Raw voucher code (e.g., "ABC12345")
+ * - Raw submission ID / UUID
+ * - URL with query parameters or path segments containing identifiers
+ * 
+ * Returns an object with:
+ * - raw: the original trimmed scan value
+ * - candidates: array of unique identifier strings to try for lookup (prioritized)
+ * - parsedFrom: optional debug info about where candidates came from
+ */
+export function parseScanValue(scanValue) {
+  const trimmed = String(scanValue || '').trim()
+  
+  if (!trimmed) {
+    return { raw: '', candidates: [], parsedFrom: 'empty' }
+  }
+  
+  const candidates = []
+  let parsedFrom = 'raw'
+  
+  // Try to parse as URL
+  try {
+    const url = new URL(trimmed)
+    parsedFrom = 'url'
+    
+    // Check common query parameter names for identifiers
+    const queryParams = ['voucherCode', 'voucher', 'code', 'submissionId', 'submission', 'id']
+    for (const param of queryParams) {
+      const value = url.searchParams.get(param)
+      if (value && value.trim()) {
+        candidates.push(value.trim())
+      }
+    }
+    
+    // Check pathname segments (last non-empty segment might be an identifier)
+    const pathSegments = url.pathname.split('/').filter(s => s.trim())
+    if (pathSegments.length > 0) {
+      const lastSegment = pathSegments[pathSegments.length - 1]
+      if (lastSegment && lastSegment.trim()) {
+        candidates.push(lastSegment.trim())
+      }
+    }
+  } catch (urlError) {
+    // Not a valid URL, treat as raw identifier
+    parsedFrom = 'raw'
+  }
+  
+  // Always include the raw value as a candidate (fallback)
+  candidates.push(trimmed)
+  
+  // Deduplicate candidates while preserving order
+  const uniqueCandidates = [...new Set(candidates)]
+  
+  return {
+    raw: trimmed,
+    candidates: uniqueCandidates,
+    parsedFrom
   }
 }

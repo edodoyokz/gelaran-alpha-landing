@@ -183,6 +183,24 @@ test('matchesSubmissionFilter - matches unpaid filter', () => {
   assert.strictEqual(matchesSubmissionFilter(paidSubmission, 'unpaid'), false)
 })
 
+test('matchesSubmissionFilter - matches checkedIn filter', () => {
+  const checkedInSubmission = {
+    ...sampleSubmission,
+    checkInStatus: 'checked_in',
+  }
+  assert.strictEqual(matchesSubmissionFilter(checkedInSubmission, 'checkedIn'), true)
+  assert.strictEqual(matchesSubmissionFilter(sampleSubmission, 'checkedIn'), false)
+})
+
+test('matchesSubmissionFilter - matches notCheckedIn filter', () => {
+  const checkedInSubmission = {
+    ...sampleSubmission,
+    checkInStatus: 'checked_in',
+  }
+  assert.strictEqual(matchesSubmissionFilter(sampleSubmission, 'notCheckedIn'), true)
+  assert.strictEqual(matchesSubmissionFilter(checkedInSubmission, 'notCheckedIn'), false)
+})
+
 // compareSubmissions tests
 test('compareSubmissions - sorts by newest', () => {
   const result = compareSubmissions(sampleSubmission, paidSubmission, 'newest')

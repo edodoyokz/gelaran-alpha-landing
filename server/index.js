@@ -497,13 +497,100 @@ export function createApp() {
         return
       }
       
-      // Update voucher sent timestamp
-      await updateSubmissionVoucherSent(req.params.id)
+      // Update voucher sent timestamp and get updated data
+      const updatedSubmission = await updateSubmissionVoucherSent(req.params.id)
       
-      res.json({ success: true, message: 'E-voucher berhasil dikirim ulang.' })
+      res.json({ 
+        success: true, 
+        message: 'E-voucher berhasil dikirim ulang.',
+        voucherSentAt: updatedSubmission?.voucherSentAt,
+        voucherLastSentAt: updatedSubmission?.voucherLastSentAt
+      })
     } catch (error) {
       console.error('[resend-evoucher] Failed to resend e-voucher:', error)
       res.status(500).json({ message: 'Terjadi kesalahan saat mengirim e-voucher.' })
+    }
+  })
+
+  app.post('/api/submissions/check-in', requireAdmin, csrf.validateToken, async (req, res) => {
+    if (!ensureStorageInVercel(res)) return
+    
+    const { scanValue } = req.body
+    
+    if (!scanValue || typeof scanValue !== 'string' || !scanValue.trim()) {
+      res.json({
+        success: false,
+        status: 'rejected',
+        reason: 'Nilai scan tidak valid atau kosong.'
+      })
+      return
+    }
+    
+    try {
+      const { findSubmissionByScanValue, updateSubmissionCheckInStatus, parseScanValue } = await import('./store.js')
+      
+      const trimmedScanValue = scanValue.trim()
+      const parsed = parseScanValue(trimmedScanValue)
+      
+      // Find submission by scan value (supports multiple formats via parser)
+      const submission = await findSubmissionByScanValue(trimmedScanValue)
+      
+      if (!submission) {
+        console.warn('[check-in] Submission not found', {
+          scanValue: trimmedScanValue.slice(0, 20),
+          parsedFrom: parsed.parsedFrom,
+          candidateCount: parsed.candidates.length
+        })
+        res.json({
+          success: false,
+          status: 'rejected',
+          reason: 'Peserta tidak ditemukan.'
+        })
+        return
+      }
+      
+      // Check if already checked in
+      if (submission.checkInStatus === 'checked_in') {
+        res.json({
+          success: false,
+          status: 'rejected',
+          reason: 'Peserta sudah check-in.',
+          checkedInAt: submission.checkedInAt,
+          submission
+        })
+        return
+      }
+      
+      // Update check-in status
+      const updated = await updateSubmissionCheckInStatus(submission.id)
+      
+      if (!updated) {
+        res.status(500).json({
+          success: false,
+          status: 'rejected',
+          reason: 'Gagal memperbarui status check-in.'
+        })
+        return
+      }
+      
+      console.info('[check-in] Check-in successful', {
+        submissionId: updated.id,
+        parsedFrom: parsed.parsedFrom
+      })
+      
+      res.json({
+        success: true,
+        status: 'accepted',
+        submission: updated,
+        checkedInAt: updated.checkedInAt
+      })
+    } catch (error) {
+      console.error('[check-in] Failed to process check-in:', error)
+      res.status(500).json({
+        success: false,
+        status: 'rejected',
+        reason: 'Terjadi kesalahan saat memproses check-in.'
+      })
     }
   })
 

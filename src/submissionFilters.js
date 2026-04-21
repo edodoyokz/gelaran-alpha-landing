@@ -150,6 +150,12 @@ export function matchesSubmissionFilter(submission, filterValue, now = new Date(
     case 'unpaid':
       return submission.paymentStatus !== 'paid'
       
+    case 'checkedIn':
+      return submission.checkInStatus === 'checked_in'
+      
+    case 'notCheckedIn':
+      return submission.checkInStatus !== 'checked_in'
+      
     default:
       return true
   }

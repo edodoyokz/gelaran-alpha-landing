@@ -1152,3 +1152,245 @@ select:focus {
   color: #6e8480;
   font-size: 0.9rem;
 }
+
+/* Check-in Status Badges */
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-success {
+  background-color: #d1fae5;
+  color: #065f46;
+  border: 1px solid #10b981;
+}
+
+.badge-pending {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
+/* Scanner Container */
+.scanner-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 24px 0;
+}
+
+.scanner-input-section {
+  margin-bottom: 24px;
+}
+
+.scanner-hint {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: #6e8480;
+}
+
+.scanner-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 24px 0;
+  color: #6e8480;
+  font-size: 0.9rem;
+}
+
+.scanner-divider::before,
+.scanner-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #d1d5db;
+}
+
+.scanner-divider span {
+  padding: 0 16px;
+  font-weight: 500;
+}
+
+.scanner-manual-section {
+  margin-bottom: 24px;
+}
+
+.scanner-manual-section form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.scanner-manual-section .btn-primary {
+  align-self: flex-start;
+}
+
+/* Scanner Result */
+.scanner-result {
+  margin-top: 32px;
+  padding: 24px;
+  border-radius: 12px;
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.scanner-status {
+  text-align: center;
+  padding: 24px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.scanner-status.success {
+  background-color: #d1fae5;
+  border: 2px solid #10b981;
+}
+
+.scanner-status.rejected {
+  background-color: #fee2e2;
+  border: 2px solid #ef4444;
+}
+
+.scanner-icon {
+  font-size: 4rem;
+  margin-bottom: 16px;
+  font-weight: bold;
+}
+
+.scanner-status.success .scanner-icon {
+  color: #065f46;
+}
+
+.scanner-status.rejected .scanner-icon {
+  color: #991b1b;
+}
+
+.scanner-status-text {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+}
+
+.scanner-status.success .scanner-status-text {
+  color: #065f46;
+}
+
+.scanner-status.rejected .scanner-status-text {
+  color: #991b1b;
+}
+
+.scanner-reason {
+  margin: 0 0 8px 0;
+  font-size: 1rem;
+  color: #374151;
+}
+
+.scanner-timestamp {
+  margin: 8px 0 0 0;
+  font-size: 0.9rem;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.scanner-participant-info {
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 16px;
+}
+
+.scanner-participant-info h5 {
+  margin: 0 0 16px 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #183330;
+}
+
+.scanner-info-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.scanner-info-item {
+  padding: 8px 0;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 0.95rem;
+}
+
+.scanner-info-item:last-child {
+  border-bottom: none;
+}
+
+.scanner-info-item strong {
+  color: #274744;
+  margin-right: 8px;
+}
+
+/* Check-in badge */
+.checkin-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.checkin-badge.checked-in {
+  background-color: #d1fae5;
+  color: #065f46;
+  border: 1px solid #10b981;
+}
+
+.checkin-badge.not-checked-in {
+  background-color: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+.scanner-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  transition: box-shadow 0.2s ease-in-out;
+}
+
+.scanner-card:focus-within {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  border-color: #1a4f47;
+}
+
+@media (min-width: 640px) {
+  .scanner-manual-section form {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+  
+  .scanner-manual-section .btn-primary {
+    width: auto;
+    white-space: nowrap;
+    margin-top: 0;
+  }
+}

@@ -72,6 +72,8 @@ function rowToSubmission(row) {
     voucherCode: row.voucher_code || null,
     voucherSentAt: row.voucher_sent_at || null,
     voucherLastSentAt: row.voucher_last_sent_at || null,
+    checkInStatus: row.check_in_status || 'not_checked_in',
+    checkedInAt: row.checked_in_at || null,
   }
 }
 
@@ -87,6 +89,8 @@ function submissionToRow(submission) {
     voucher_code: submission.voucherCode || null,
     voucher_sent_at: submission.voucherSentAt || null,
     voucher_last_sent_at: submission.voucherLastSentAt || null,
+    check_in_status: submission.checkInStatus || 'not_checked_in',
+    checked_in_at: submission.checkedInAt || null,
   }
 }
 
@@ -426,6 +430,72 @@ export async function updateSupabaseSubmissionVoucherSent(id) {
     return rowToSubmission(data)
   } catch (err) {
     console.error('[supabaseStorage] updateSupabaseSubmissionVoucherSent error:', err)
+    return null
+  }
+}
+
+export async function updateSupabaseSubmissionCheckInStatus(id) {
+  try {
+    const client = getClient()
+    if (!client) return null
+
+    const updateData = {
+      check_in_status: 'checked_in',
+      checked_in_at: new Date().toISOString(),
+    }
+
+    const { data, error } = await client
+      .from('submissions')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+    if (!data) return null
+
+    return rowToSubmission(data)
+  } catch (err) {
+    console.error('[supabaseStorage] updateSupabaseSubmissionCheckInStatus error:', err)
+    return null
+  }
+}
+
+export async function findSupabaseSubmissionByScanValue(scanValue) {
+  try {
+    const client = getClient()
+    if (!client) return null
+
+    // Import parser from store
+    const { parseScanValue } = await import('./store.js')
+    const parsed = parseScanValue(scanValue)
+    
+    // Try each candidate in order until we find a match
+    for (const candidate of parsed.candidates) {
+      // Try voucher code first (primary QR payload)
+      let { data, error } = await client
+        .from('submissions')
+        .select('*')
+        .eq('voucher_code', candidate)
+        .maybeSingle()
+
+      if (error) throw error
+      if (data) return rowToSubmission(data)
+
+      // Fallback to submission ID
+      const result = await client
+        .from('submissions')
+        .select('*')
+        .eq('id', candidate)
+        .maybeSingle()
+
+      if (result.error) throw result.error
+      if (result.data) return rowToSubmission(result.data)
+    }
+    
+    return null
+  } catch (err) {
+    console.error('[supabaseStorage] findSupabaseSubmissionByScanValue error:', err)
     return null
   }
 }

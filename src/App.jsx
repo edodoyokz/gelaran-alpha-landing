@@ -70,6 +70,8 @@ const submissionFilters = [
   { value: 'withPhone', label: 'Ada nomor' },
   { value: 'paid', label: 'Sudah bayar' },
   { value: 'unpaid', label: 'Belum bayar' },
+  { value: 'checkedIn', label: 'Sudah check-in' },
+  { value: 'notCheckedIn', label: 'Belum check-in' },
 ]
 
 const submissionSorts = [
@@ -212,10 +214,20 @@ function App() {
   const [deletingSubmissionId, setDeletingSubmissionId] = useState('')
   const [selectedParticipant, setSelectedParticipant] = useState(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
+  const [resendingVoucherId, setResendingVoucherId] = useState(null)
   const [emailConfig, setEmailConfig] = useState(null)
   const [testEmailRecipient, setTestEmailRecipient] = useState('')
   const [testEmailType, setTestEmailType] = useState('participant')
   const [sendingTestEmail, setSendingTestEmail] = useState(false)
+  
+  // Scanner state
+  const [scannerInput, setScannerInput] = useState('')
+  const [manualScannerInput, setManualScannerInput] = useState('')
+  const [scannerLoading, setScannerLoading] = useState(false)
+  const [scannerResult, setScannerResult] = useState(null)
+  const scannerAutoClearTimeoutRef = useRef(null)
+  const scannerInputRef = useRef(null)
+  
   const fileInputRef = useRef(null)
   const pageSize = 5
 
@@ -739,7 +751,14 @@ function App() {
       setSubmissions((current) =>
         current.map((sub) =>
           sub.id === submissionId
-            ? { ...sub, paymentStatus: 'paid', paymentConfirmedAt: data.paymentConfirmedAt, voucherCode: data.voucherCode }
+            ? { 
+                ...sub, 
+                paymentStatus: 'paid', 
+                paymentConfirmedAt: data.paymentConfirmedAt, 
+                voucherCode: data.voucherCode,
+                voucherSentAt: data.voucherSentAt,
+                voucherLastSentAt: data.voucherLastSentAt
+              }
             : sub
         )
       )
@@ -751,10 +770,17 @@ function App() {
           paymentStatus: 'paid',
           paymentConfirmedAt: data.paymentConfirmedAt,
           voucherCode: data.voucherCode,
+          voucherSentAt: data.voucherSentAt,
+          voucherLastSentAt: data.voucherLastSentAt,
         })
       }
 
-      setMessage('Status pembayaran berhasil diupdate menjadi Lunas.')
+      // Display appropriate message based on email delivery
+      if (data.emailDeliveryWarning) {
+        setMessage(`Status pembayaran berhasil diupdate menjadi Lunas, tetapi ${data.emailDeliveryWarning}`)
+      } else {
+        setMessage('Status pembayaran berhasil diupdate menjadi Lunas dan e-voucher berhasil dikirim.')
+      }
     } catch {
       setMessage('Gagal mengupdate status pembayaran.')
     } finally {
@@ -763,12 +789,24 @@ function App() {
   }
 
   async function resendVoucher(submissionId) {
-    if (!submissionId) return
+    if (!submissionId || resendingVoucherId === submissionId) return
 
-    const shouldResend = window.confirm('Kirim ulang e-voucher ke email peserta?')
+    // Get participant data for contextual confirm message
+    const participant = selectedParticipant?.id === submissionId 
+      ? selectedParticipant 
+      : submissions.find(s => s.id === submissionId)
+
+    const isFirstSend = !participant?.voucherSentAt
+    const confirmMessage = isFirstSend
+      ? 'Kirim e-voucher ke email peserta sekarang?'
+      : 'E-voucher sudah pernah dikirim. Kirim ulang ke email peserta?'
+
+    const shouldResend = window.confirm(confirmMessage)
     if (!shouldResend) return
 
     try {
+      setResendingVoucherId(submissionId)
+      
       const response = await apiFetch(`/api/submissions/${submissionId}/resend-evoucher`, {
         method: 'POST',
       })
@@ -780,12 +818,39 @@ function App() {
       }
 
       const data = await response.json()
-      setMessage(data.message || 'E-voucher berhasil dikirim ulang.')
       
-      // Reload admin data to get updated voucher sent timestamps
-      await loadAdminData()
+      // Update submissions list with new timestamps if available
+      if (data.voucherSentAt || data.voucherLastSentAt) {
+        setSubmissions((current) =>
+          current.map((sub) =>
+            sub.id === submissionId
+              ? { 
+                  ...sub, 
+                  voucherSentAt: data.voucherSentAt || sub.voucherSentAt,
+                  voucherLastSentAt: data.voucherLastSentAt || sub.voucherLastSentAt
+                }
+              : sub
+          )
+        )
+
+        // Update selected participant if modal is open
+        if (selectedParticipant?.id === submissionId) {
+          setSelectedParticipant({
+            ...selectedParticipant,
+            voucherSentAt: data.voucherSentAt || selectedParticipant.voucherSentAt,
+            voucherLastSentAt: data.voucherLastSentAt || selectedParticipant.voucherLastSentAt,
+          })
+        }
+      } else {
+        // Fallback to full reload if backend doesn't return timestamps
+        await loadAdminData()
+      }
+      
+      setMessage(data.message || 'E-voucher berhasil dikirim ulang.')
     } catch {
       setMessage('Gagal mengirim ulang e-voucher.')
+    } finally {
+      setResendingVoucherId(null)
     }
   }
 
@@ -957,6 +1022,142 @@ function App() {
       }
     })
   }
+
+  // Scanner handlers - React state-driven
+  const submitGateScan = useCallback(async (scanValue, source = 'auto') => {
+    if (!scanValue || !scanValue.trim() || scannerLoading) return
+
+    setScannerLoading(true)
+    
+    // Clear any pending auto-clear timeout
+    if (scannerAutoClearTimeoutRef.current) {
+      clearTimeout(scannerAutoClearTimeoutRef.current)
+      scannerAutoClearTimeoutRef.current = null
+    }
+
+    try {
+      const response = await apiFetch('/api/submissions/check-in', {
+        method: 'POST',
+        body: JSON.stringify({ scanValue: scanValue.trim() }),
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.status === 'accepted') {
+        // Success - check-in accepted
+        setScannerResult({
+          status: 'accepted',
+          reason: 'Peserta berhasil check-in',
+          submission: data.submission,
+          checkedInAt: data.checkedInAt,
+          scanValue: scanValue.trim()
+        })
+
+        // Update submissions state in-place (like markAsPaid pattern)
+        setSubmissions(prev => prev.map(sub => 
+          sub.id === data.submission.id 
+            ? { ...sub, checkInStatus: 'checked_in', checkedInAt: data.checkedInAt }
+            : sub
+        ))
+
+        // Update selectedParticipant if it's the same submission
+        if (selectedParticipant?.id === data.submission.id) {
+          setSelectedParticipant(prev => ({
+            ...prev,
+            checkInStatus: 'checked_in',
+            checkedInAt: data.checkedInAt
+          }))
+        }
+      } else {
+        // Rejected
+        setScannerResult({
+          status: 'rejected',
+          reason: data.reason || 'Peserta tidak dapat check-in',
+          submission: data.submission || null,
+          checkedInAt: data.checkedInAt || null,
+          scanValue: scanValue.trim()
+        })
+      }
+
+      // Auto-clear result after 5 seconds
+      scannerAutoClearTimeoutRef.current = setTimeout(() => {
+        setScannerResult(null)
+        setScannerInput('')
+        setManualScannerInput('')
+        scannerInputRef.current?.focus()
+      }, 5000)
+
+    } catch (error) {
+      console.error('Scanner error:', error)
+      setScannerResult({
+        status: 'error',
+        reason: 'Terjadi kesalahan saat memproses scan',
+        submission: null,
+        checkedInAt: null,
+        scanValue: scanValue.trim()
+      })
+
+      // Auto-clear error after 5 seconds
+      scannerAutoClearTimeoutRef.current = setTimeout(() => {
+        setScannerResult(null)
+        setScannerInput('')
+        setManualScannerInput('')
+        scannerInputRef.current?.focus()
+      }, 5000)
+    } finally {
+      setScannerLoading(false)
+    }
+  }, [scannerLoading, selectedParticipant])
+
+  const handleScannerInputChange = useCallback((e) => {
+    const value = e.target.value
+    setScannerInput(value)
+  }, [])
+
+  const handleManualScannerSubmit = useCallback((e) => {
+    e.preventDefault()
+    if (manualScannerInput.trim()) {
+      submitGateScan(manualScannerInput, 'manual')
+    }
+  }, [manualScannerInput, submitGateScan])
+
+  const resetScannerResult = useCallback(() => {
+    if (scannerAutoClearTimeoutRef.current) {
+      clearTimeout(scannerAutoClearTimeoutRef.current)
+      scannerAutoClearTimeoutRef.current = null
+    }
+    setScannerResult(null)
+    setScannerInput('')
+    setManualScannerInput('')
+    scannerInputRef.current?.focus()
+  }, [])
+
+  // Scanner auto-submit effect (for external scanner devices)
+  useEffect(() => {
+    if (adminTab !== 'scanner' || !scannerInput.trim()) return
+
+    const timeout = setTimeout(() => {
+      if (scannerInput.trim()) {
+        submitGateScan(scannerInput, 'auto')
+      }
+    }, 500)
+
+    return () => clearTimeout(timeout)
+  }, [scannerInput, adminTab, submitGateScan])
+
+  // Scanner tab focus and cleanup
+  useEffect(() => {
+    if (adminTab === 'scanner') {
+      scannerInputRef.current?.focus()
+    }
+
+    return () => {
+      if (scannerAutoClearTimeoutRef.current) {
+        clearTimeout(scannerAutoClearTimeoutRef.current)
+        scannerAutoClearTimeoutRef.current = null
+      }
+    }
+  }, [adminTab])
 
   if (loading) {
     return (
@@ -1202,6 +1403,13 @@ function App() {
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
                 Email Settings
               </button>
+              <button
+                className={adminTab === 'scanner' ? 'sidebar-btn active' : 'sidebar-btn'}
+                onClick={() => setAdminTab('scanner')}
+              >
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
+                Gate Scanner
+              </button>
             </nav>
 
             <div className="sidebar-footer">
@@ -1216,7 +1424,7 @@ function App() {
 
           <section className="admin-content-area">
             {adminTab === 'settings' && (
-              <div className="admin-main-card">
+              <div className="admin-main-card scanner-card">
                 <div className="panel-head inline-head">
                   <div>
                     <h3>Informasi event</h3>
@@ -1386,7 +1594,7 @@ function App() {
             )}
 
             {adminTab === 'builder' && (
-              <div className="admin-main-card">
+              <div className="admin-main-card scanner-card">
                 <div className="inline-head compact-head">
                   <div>
                     <h3>Form builder</h3>
@@ -1472,7 +1680,7 @@ function App() {
             )}
 
             {adminTab === 'submissions' && (
-              <div className="admin-main-card">
+              <div className="admin-main-card scanner-card">
                 <div className="panel-head inline-head">
                   <div>
                     <h3>Data pendaftar</h3>
@@ -1561,13 +1769,14 @@ function App() {
                             {(schema.fields || []).map((field) => (
                               <th key={field.id}>{field.label}</th>
                             ))}
+                            <th>Status Check-in</th>
                             <th>Aksi</th>
                           </tr>
                         </thead>
                         <tbody>
                           {paginatedSubmissions.length === 0 ? (
                             <tr>
-                              <td colSpan={(schema.fields || []).length + 2} className="text-center py-4">
+                              <td colSpan={(schema.fields || []).length + 3} className="text-center py-4">
                                 {submissions.length === 0 
                                   ? 'Belum ada data pendaftar.'
                                   : 'Tidak ada peserta yang cocok dengan pencarian dan filter saat ini.'}
@@ -1581,6 +1790,13 @@ function App() {
                                   const answer = sub.answers.find((a) => a.label === field.label)
                                   return <td key={field.id}>{answer ? answer.value : '-'}</td>
                                 })}
+                                <td>
+                                  {sub.checkInStatus === 'checked_in' ? (
+                                    <span className="badge badge-success">Sudah Check-in</span>
+                                  ) : (
+                                    <span className="badge badge-pending">Belum Check-in</span>
+                                  )}
+                                </td>
                                 <td>
                                   <div style={{ display: 'flex', gap: '8px' }}>
                                     <button
@@ -1667,6 +1883,19 @@ function App() {
                                   )}
                                 </span>
                               </div>
+                              <div className="participant-detail-row">
+                                <span className="detail-label">Status Check-in:</span>
+                                <span className="detail-value">
+                                  <span className={`checkin-badge ${selectedParticipant.checkInStatus === 'checked_in' ? 'checked-in' : 'not-checked-in'}`}>
+                                    {selectedParticipant.checkInStatus === 'checked_in' ? 'Sudah Check-in' : 'Belum Check-in'}
+                                  </span>
+                                  {selectedParticipant.checkInStatus === 'checked_in' && selectedParticipant.checkedInAt && (
+                                    <small style={{ marginLeft: '8px', color: '#666' }}>
+                                      {new Date(selectedParticipant.checkedInAt).toLocaleString('id-ID')}
+                                    </small>
+                                  )}
+                                </span>
+                              </div>
                               {selectedParticipant.paymentStatus === 'paid' && selectedParticipant.voucherCode && (
                                 <>
                                   <div className="participant-detail-row">
@@ -1675,20 +1904,26 @@ function App() {
                                       <strong>{selectedParticipant.voucherCode}</strong>
                                     </span>
                                   </div>
-                                  {selectedParticipant.voucherSentAt && (
-                                    <div className="participant-detail-row">
-                                      <span className="detail-label">E-voucher Terkirim:</span>
-                                      <span className="detail-value">
-                                        {new Date(selectedParticipant.voucherSentAt).toLocaleString('id-ID')}
-                                        {selectedParticipant.voucherLastSentAt && 
-                                         selectedParticipant.voucherLastSentAt !== selectedParticipant.voucherSentAt && (
-                                          <small style={{ marginLeft: '8px', color: '#666' }}>
-                                            (Terakhir dikirim: {new Date(selectedParticipant.voucherLastSentAt).toLocaleString('id-ID')})
-                                          </small>
-                                        )}
-                                      </span>
-                                    </div>
-                                  )}
+                                  <div className="participant-detail-row">
+                                    <span className="detail-label">Status Pengiriman:</span>
+                                    <span className="detail-value">
+                                      {!selectedParticipant.voucherSentAt ? (
+                                        <span style={{ color: '#666' }}>Belum pernah dikirim</span>
+                                      ) : (
+                                        <>
+                                          Pertama dikirim: {new Date(selectedParticipant.voucherSentAt).toLocaleString('id-ID')}
+                                          {selectedParticipant.voucherLastSentAt && 
+                                           selectedParticipant.voucherLastSentAt !== selectedParticipant.voucherSentAt && (
+                                            <div style={{ marginTop: '4px' }}>
+                                              <small style={{ color: '#666' }}>
+                                                Terakhir dikirim ulang: {new Date(selectedParticipant.voucherLastSentAt).toLocaleString('id-ID')}
+                                              </small>
+                                            </div>
+                                          )}
+                                        </>
+                                      )}
+                                    </span>
+                                  </div>
                                 </>
                               )}
                               <hr className="detail-divider" />
@@ -1726,8 +1961,12 @@ function App() {
                                 <button 
                                   className="primary-btn" 
                                   onClick={() => resendVoucher(selectedParticipant.id)}
+                                  disabled={resendingVoucherId === selectedParticipant.id}
                                 >
-                                  Kirim Ulang E-voucher
+                                  {resendingVoucherId === selectedParticipant.id 
+                                    ? 'Mengirim...' 
+                                    : (selectedParticipant.voucherSentAt ? 'Kirim Ulang E-voucher' : 'Kirim E-voucher')
+                                  }
                                 </button>
                               )}
                               <button 
@@ -1748,7 +1987,7 @@ function App() {
             )}
 
             {adminTab === 'email' && (
-              <div className="admin-main-card">
+              <div className="admin-main-card scanner-card">
                 {!emailConfig ? (
                   <p className="empty-state" role="status" aria-live="polite">Memuat konfigurasi email...</p>
                 ) : (
@@ -2031,6 +2270,102 @@ function App() {
                 </div>
                   </>
                 )}
+              </div>
+            )}
+
+            {adminTab === 'scanner' && (
+              <div className="admin-main-card scanner-card">
+                <div className="panel-head inline-head">
+                  <div>
+                    <h3>Gate Scanner</h3>
+                    <p>Scan QR code voucher untuk check-in peserta</p>
+                  </div>
+                </div>
+                {message && <p className="form-message mb-2">{message}</p>}
+
+                <div className="scanner-container">
+                  <div className="scanner-input-section">
+                    <label className="field-block">
+                      <span>Scan QR code (auto-detect)</span>
+                      <input
+                        ref={scannerInputRef}
+                        type="text"
+                        value={scannerInput}
+                        onChange={handleScannerInputChange}
+                        placeholder="Arahkan scanner ke QR code..."
+                        autoFocus
+                        autoComplete="off"
+                        disabled={scannerLoading}
+                      />
+                    </label>
+                    <p className="scanner-hint">Scanner akan otomatis memproses QR code yang terdeteksi</p>
+                  </div>
+
+                  <div className="scanner-divider">
+                    <span>atau</span>
+                  </div>
+
+                  <div className="scanner-manual-section">
+                    <form onSubmit={handleManualScannerSubmit}>
+                      <label className="field-block">
+                        <span>Input manual</span>
+                        <input
+                          type="text"
+                          value={manualScannerInput}
+                          onChange={(e) => setManualScannerInput(e.target.value)}
+                          placeholder="Ketik kode voucher atau ID peserta..."
+                          autoComplete="off"
+                          disabled={scannerLoading}
+                        />
+                      </label>
+                      <button 
+                        type="submit" 
+                        className="btn-primary"
+                        disabled={scannerLoading || !manualScannerInput.trim()}
+                      >
+                        {scannerLoading ? 'Memproses...' : 'Submit Check-in'}
+                      </button>
+                    </form>
+                  </div>
+
+                  {scannerResult && (
+                    <div className="scanner-result">
+                      <div className={`scanner-status ${scannerResult.status === 'accepted' ? 'success' : 'rejected'}`}>
+                        <div className="scanner-icon">
+                          {scannerResult.status === 'accepted' ? '✓' : '✗'}
+                        </div>
+                        <h4 className="scanner-status-text">
+                          {scannerResult.status === 'accepted' ? 'Check-in Berhasil' : 
+                           scannerResult.status === 'error' ? 'Error' : 'Check-in Ditolak'}
+                        </h4>
+                        <p className="scanner-reason">{scannerResult.reason}</p>
+                        {scannerResult.checkedInAt && (
+                          <p className="scanner-timestamp">
+                            Waktu check-in: {new Date(scannerResult.checkedInAt).toLocaleString('id-ID')}
+                          </p>
+                        )}
+                      </div>
+                      {scannerResult.submission && (
+                        <div className="scanner-participant-info">
+                          <h5>Informasi Peserta</h5>
+                          <div className="scanner-info-grid">
+                            {(scannerResult.submission.answers || []).map((answer, idx) => (
+                              <div key={idx} className="scanner-info-item">
+                                <strong>{answer.label}:</strong> {answer.value}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <button 
+                        className="btn-secondary mt-2"
+                        onClick={resetScannerResult}
+                      >
+                        Scan Berikutnya
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </section>
