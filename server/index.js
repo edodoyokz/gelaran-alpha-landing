@@ -26,6 +26,7 @@ import {
 import { isR2StorageEnabled, uploadR2File } from './r2Storage.js'
 import { isSupabaseEnabled } from './supabaseStorage.js'
 import { sendParticipantEmail, sendAdminNotification, sendTestEmail, sendPaymentConfirmedVoucherEmail } from './emailService.js'
+import { buildEmailSubmissionData } from './emailPayload.js'
 
 // CSRF Protection Middleware
 function createCsrfMiddleware() {
@@ -412,33 +413,34 @@ export function createApp() {
     }
 
     // Send e-voucher email when payment is confirmed
+    let emailDeliveryWarning = null
     if (paymentStatus === 'paid') {
       try {
         const schema = await getSchema()
         const emailConfig = await getEmailConfig()
         
-        // Prepare submission data for email
-        const submissionData = {
-          id: updated.id,
-          email: updated.email,
-          'full-name': updated['full-name'],
-          voucherCode: updated.voucherCode,
-          ...updated,
-        }
+        // Prepare submission data for email using helper to extract fields from answers
+        const submissionData = buildEmailSubmissionData(updated)
         
         const emailResult = await sendPaymentConfirmedVoucherEmail(emailConfig, schema, submissionData)
         
-        if (!emailResult.error && !emailResult.skipped) {
-          // Update voucher sent timestamp
+        if (emailResult.error) {
+          console.error('[payment-status] E-voucher email failed:', emailResult.message || emailResult.error)
+          emailDeliveryWarning = `Status pembayaran berhasil diubah, tetapi email e-voucher gagal dikirim: ${emailResult.message || 'Unknown error'}`
+        } else if (emailResult.skipped) {
+          console.warn('[payment-status] E-voucher email skipped:', emailResult.reason)
+          emailDeliveryWarning = `Status pembayaran berhasil diubah, tetapi email e-voucher tidak dikirim: ${emailResult.reason}`
+        } else {
+          // Update voucher sent timestamp only on success
           await updateSubmissionVoucherSent(req.params.id)
         }
       } catch (error) {
-        console.error('Failed to send e-voucher email:', error)
-        // Don't fail the payment status update if email fails
+        console.error('[payment-status] Failed to send e-voucher email:', error)
+        emailDeliveryWarning = 'Status pembayaran berhasil diubah, tetapi terjadi kesalahan saat mengirim email e-voucher.'
       }
     }
 
-    res.json(updated)
+    res.json({ ...updated, emailDeliveryWarning })
   })
 
   app.post('/api/submissions/:id/resend-evoucher', requireAdmin, csrf.validateToken, async (req, res) => {
@@ -466,19 +468,13 @@ export function createApp() {
       const schema = await getSchema()
       const emailConfig = await getEmailConfig()
       
-      // Prepare submission data for email
-      const submissionData = {
-        id: submission.id,
-        email: submission.email,
-        'full-name': submission['full-name'],
-        voucherCode: submission.voucherCode,
-        ...submission,
-      }
+      // Prepare submission data for email using helper to extract fields from answers
+      const submissionData = buildEmailSubmissionData(submission)
       
       const emailResult = await sendPaymentConfirmedVoucherEmail(emailConfig, schema, submissionData)
       
       if (emailResult.error) {
-        res.status(500).json({ message: `Gagal mengirim e-voucher: ${emailResult.error}` })
+        res.status(500).json({ message: `Gagal mengirim e-voucher: ${emailResult.message || emailResult.error}` })
         return
       }
       
@@ -492,7 +488,7 @@ export function createApp() {
       
       res.json({ success: true, message: 'E-voucher berhasil dikirim ulang.' })
     } catch (error) {
-      console.error('Failed to resend e-voucher:', error)
+      console.error('[resend-evoucher] Failed to resend e-voucher:', error)
       res.status(500).json({ message: 'Terjadi kesalahan saat mengirim e-voucher.' })
     }
   })
