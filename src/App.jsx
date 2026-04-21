@@ -196,6 +196,7 @@ function App() {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [formLoadedAt] = useState(() => Date.now())
+  const [isSubmitting, setIsSubmitting] = useState(false)
    const [saving, setSaving] = useState(false)
    const [uploadingPoster, setUploadingPoster] = useState(false)
    const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false)
@@ -548,6 +549,9 @@ function App() {
     event.preventDefault()
     setMessage('')
 
+    // Prevent double submit while request is in flight
+    if (isSubmitting) return
+
     if (!schema || !schema.fields || !Array.isArray(schema.fields)) {
       setMessage('Error: Schema tidak valid. Silakan refresh halaman.')
       return
@@ -579,6 +583,8 @@ function App() {
     }
 
     try {
+      setIsSubmitting(true)
+      
       const response = await apiFetch('/api/submissions', {
         method: 'POST',
         body: JSON.stringify({
@@ -621,6 +627,8 @@ function App() {
       setMessage('Pendaftaran berhasil dikirim. Data peserta sudah tersimpan di server.')
     } catch {
       setMessage('Gagal mengirim pendaftaran.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -1097,11 +1105,13 @@ function App() {
                           value={value}
                           onChange={(event) => handleFormValue(field.id, event.target.value, field.type)}
                           rows="4"
+                          disabled={isSubmitting}
                         />
                       ) : field.type === 'select' ? (
                         <select
                           value={value}
                           onChange={(event) => handleFormValue(field.id, event.target.value, field.type)}
+                          disabled={isSubmitting}
                         >
                           <option value="">Pilih salah satu</option>
                           {options.map((option) => (
@@ -1118,6 +1128,7 @@ function App() {
                             onChange={(event) =>
                               handleFormValue(field.id, event.target.checked, field.type)
                             }
+                            disabled={isSubmitting}
                           />
                           <p>Saya menyetujui syarat dan ketentuan pendaftaran.</p>
                         </div>
@@ -1127,14 +1138,15 @@ function App() {
                           placeholder={field.placeholder}
                           value={value}
                           onChange={(event) => handleFormValue(field.id, event.target.value, field.type)}
+                          disabled={isSubmitting}
                         />
                       )}
                     </label>
                   )
                 })}
 
-                <button type="submit" className="primary-btn full-width">
-                  Kirim Pendaftaran
+                <button type="submit" className="primary-btn full-width" disabled={isSubmitting}>
+                  {isSubmitting ? 'Mengirim...' : 'Kirim Pendaftaran'}
                 </button>
               </form>
 
