@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PulseLoader } from 'react-spinners'
 import './index.css'
 import { logError } from './errorTracker.js'
+import { matchesSubmissionQuery, matchesSubmissionFilter, compareSubmissions } from './submissionFilters.js'
 
 // Custom hook for debouncing values
 function useDebounce(value, delay) {
@@ -63,7 +64,12 @@ const fieldTypes = [
 const submissionFilters = [
   { value: 'all', label: 'Semua data' },
   { value: 'today', label: 'Hari ini' },
+  { value: 'thisWeek', label: 'Minggu ini' },
+  { value: 'thisMonth', label: 'Bulan ini' },
   { value: 'withEmail', label: 'Ada email' },
+  { value: 'withPhone', label: 'Ada nomor' },
+  { value: 'paid', label: 'Sudah bayar' },
+  { value: 'unpaid', label: 'Belum bayar' },
 ]
 
 const submissionSorts = [
@@ -71,6 +77,10 @@ const submissionSorts = [
   { value: 'oldest', label: 'Terlama' },
   { value: 'nameAsc', label: 'Nama A-Z' },
   { value: 'nameDesc', label: 'Nama Z-A' },
+  { value: 'paidFirst', label: 'Lunas dulu' },
+  { value: 'unpaidFirst', label: 'Belum lunas dulu' },
+  { value: 'emailFirst', label: 'Ada email dulu' },
+  { value: 'phoneFirst', label: 'Ada nomor dulu' },
 ]
 
 const apiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
@@ -290,34 +300,13 @@ function App() {
   const debouncedSubmissionQuery = useDebounce(submissionQuery, 300)
 
   const filteredSubmissions = useMemo(() => {
-    const normalizedQuery = debouncedSubmissionQuery.trim().toLowerCase()
-    const todayIso = new Date().toISOString().slice(0, 10)
-
     const filtered = submissions.filter((submission) => {
-      const matchesQuery =
-        normalizedQuery.length === 0 ||
-        submission.answers.some(
-          (answer) =>
-            answer.label.toLowerCase().includes(normalizedQuery) ||
-            String(answer.value).toLowerCase().includes(normalizedQuery),
-        )
-
-      const matchesFilter =
-        submissionFilter === 'all' ||
-        (submissionFilter === 'today' &&
-          String(submission.submittedAtIso || '').startsWith(todayIso)) ||
-        (submissionFilter === 'withEmail' &&
-          submission.answers.some((answer) => answer.label.toLowerCase().includes('email')))
-
-      return matchesQuery && matchesFilter
+      const queryMatch = matchesSubmissionQuery(submission, debouncedSubmissionQuery)
+      const filterMatch = matchesSubmissionFilter(submission, submissionFilter)
+      return queryMatch && filterMatch
     })
 
-    return filtered.toSorted((left, right) => {
-      if (submissionSort === 'oldest') return getSubmissionTimeValue(left) - getSubmissionTimeValue(right)
-      if (submissionSort === 'nameAsc') return getPrimaryAnswer(left).localeCompare(getPrimaryAnswer(right), 'id')
-      if (submissionSort === 'nameDesc') return getPrimaryAnswer(right).localeCompare(getPrimaryAnswer(left), 'id')
-      return getSubmissionTimeValue(right) - getSubmissionTimeValue(left)
-    })
+    return filtered.toSorted((left, right) => compareSubmissions(left, right, submissionSort))
   }, [submissionFilter, debouncedSubmissionQuery, submissionSort, submissions])
 
   useEffect(() => {
@@ -706,6 +695,13 @@ function App() {
   function closeParticipantDetail() {
     setShowDetailModal(false)
     setSelectedParticipant(null)
+  }
+
+  function resetSubmissionControls() {
+    setSubmissionQuery('')
+    setSubmissionFilter('all')
+    setSubmissionSort('newest')
+    setCurrentPage(1)
   }
 
   async function markAsPaid(submissionId) {
@@ -1474,7 +1470,7 @@ function App() {
                     aria-label="Cari data pendaftar berdasarkan nama, email, atau nomor"
                     value={submissionQuery}
                     onChange={(event) => setSubmissionQuery(event.target.value)}
-                    placeholder="Cari nama, email, nomor..."
+                    placeholder="Cari nama, email, nomor WhatsApp..."
                   />
                   <select
                     aria-label="Filter pendaftar"
@@ -1499,6 +1495,14 @@ function App() {
                     ))}
                   </select>
                 </div>
+
+                {(submissionQuery || submissionFilter !== 'all' || submissionSort !== 'newest') && (
+                  <div style={{ marginTop: '12px', marginBottom: '8px' }}>
+                    <button className="ghost-btn" onClick={resetSubmissionControls}>
+                      Reset Pencarian & Filter
+                    </button>
+                  </div>
+                )}
 
                 <div className="analytics-strip">
                   <article className="analytics-card">
@@ -1544,7 +1548,9 @@ function App() {
                           {paginatedSubmissions.length === 0 ? (
                             <tr>
                               <td colSpan={(schema.fields || []).length + 2} className="text-center py-4">
-                                Tidak ada data yang cocok.
+                                {submissions.length === 0 
+                                  ? 'Belum ada data pendaftar.'
+                                  : 'Tidak ada peserta yang cocok dengan pencarian dan filter saat ini.'}
                               </td>
                             </tr>
                           ) : (
