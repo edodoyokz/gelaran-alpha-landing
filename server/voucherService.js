@@ -44,6 +44,57 @@ export async function generateQRCodeDataURL(payload) {
 }
 
 /**
+ * Generate QR code as PNG buffer
+ * @param {string} payload - QR code payload
+ * @returns {Promise<Buffer>} - QR code PNG buffer
+ */
+export async function generateQRCodeBuffer(payload) {
+  try {
+    return await QRCode.toBuffer(payload, {
+      errorCorrectionLevel: 'M',
+      type: 'png',
+      width: 300,
+      margin: 2,
+    })
+  } catch (error) {
+    console.error('Failed to generate QR code buffer:', error)
+    throw new Error('Failed to generate QR code buffer')
+  }
+}
+
+/**
+ * Build voucher assets with retry logic
+ * @param {Object} params - Voucher parameters
+ * @returns {Promise<Object>} - Voucher assets including QR buffer
+ */
+export async function buildVoucherAssets({ eventName, submissionId, voucherCode }) {
+  const qrPayload = generateQRPayload(eventName, submissionId, voucherCode)
+  
+  let qrCodeBuffer
+  let lastError
+  
+  // Try to generate QR code with one retry
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      qrCodeBuffer = await generateQRCodeBuffer(qrPayload)
+      break
+    } catch (error) {
+      lastError = error
+      console.error(`[buildVoucherAssets] QR generation attempt ${attempt} failed:`, error)
+      if (attempt === 2) {
+        throw new Error(`Failed to generate QR code after 2 attempts: ${lastError.message}`)
+      }
+    }
+  }
+  
+  return {
+    voucherCode,
+    qrPayload,
+    qrCodeBuffer,
+  }
+}
+
+/**
  * Generate e-voucher HTML content
  * @param {Object} params - Voucher parameters
  * @returns {string} - HTML content for e-voucher

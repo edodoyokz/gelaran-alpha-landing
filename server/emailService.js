@@ -1,5 +1,5 @@
 import { Resend } from 'resend'
-import { generateVoucherCode, generateQRPayload, generateQRCodeDataURL, generateEVoucherHTML } from './voucherService.js'
+import { generateVoucherCode, buildVoucherAssets } from './voucherService.js'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
@@ -368,25 +368,20 @@ export async function sendPaymentConfirmedVoucherEmail(emailConfig, eventData, s
   const participantName = submissionData['full-name'] || submissionData.name || 'Peserta'
   const voucherCode = submissionData.voucherCode || generateVoucherCode(submissionData.id)
 
-  // Generate QR code
-  const qrPayload = generateQRPayload(eventData.eventName, submissionData.id, voucherCode)
-  let qrCodeDataURL
+  // Build voucher assets with retry logic
+  let voucherAssets
   try {
-    qrCodeDataURL = await generateQRCodeDataURL(qrPayload)
+    voucherAssets = await buildVoucherAssets({
+      eventName: eventData.eventName,
+      submissionId: submissionData.id,
+      voucherCode,
+    })
   } catch (error) {
-    console.error('Failed to generate QR code:', error)
-    return { error: true, message: 'Failed to generate QR code' }
+    console.error('[sendPaymentConfirmedVoucherEmail] Failed to build voucher assets:', error)
+    return { error: true, message: `Failed to generate voucher QR code: ${error.message}` }
   }
 
-  // Generate e-voucher HTML for attachment
-  const eVoucherHTML = generateEVoucherHTML({
-    eventName: eventData.eventName,
-    eventDate: eventData.date,
-    eventLocation: eventData.location,
-    participantName,
-    voucherCode,
-    qrCodeDataURL,
-  })
+  const { qrCodeBuffer } = voucherAssets
 
   // Email subject and body
   const subject = `Pembayaran Terkonfirmasi - ${eventData.eventName}`
@@ -435,11 +430,11 @@ export async function sendPaymentConfirmedVoucherEmail(emailConfig, eventData, s
       <div style="text-align: center; padding: 30px 0; background: #f9fafb; margin: 20px -30px;">
         <h3 style="font-size: 16px; color: #374151; margin: 0 0 16px 0;">Scan QR Code saat Check-in</h3>
         <div style="display: inline-block; padding: 16px; background: white; border-radius: 8px;">
-          <img src="${qrCodeDataURL}" alt="QR Code" width="250" height="250" style="display: block;" />
+          <img src="cid:voucher-qr" alt="QR Code" width="250" height="250" style="display: block;" />
         </div>
       </div>
       <p style="margin: 20px 0 0 0; color: #374151; font-size: 14px; line-height: 1.7;">
-        E-voucher lengkap juga dilampirkan pada email ini. Simpan e-voucher dan tunjukkan saat check-in event.
+        QR code juga dilampirkan sebagai file gambar. Simpan e-voucher dan tunjukkan saat check-in event.
       </p>
     </div>
     <div style="background: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb;">
@@ -461,13 +456,14 @@ export async function sendPaymentConfirmedVoucherEmail(emailConfig, eventData, s
       html: emailBody,
       attachments: [
         {
-          filename: `evoucher-${voucherCode}.html`,
-          content: Buffer.from(eVoucherHTML).toString('base64'),
+          filename: `voucher-qr-${voucherCode}.png`,
+          content: qrCodeBuffer.toString('base64'),
+          content_id: 'voucher-qr',
         },
       ],
     })
   } catch (error) {
-    console.error('Failed to send payment confirmed voucher email:', error)
+    console.error('[sendPaymentConfirmedVoucherEmail] Failed to send email:', error)
     return { error: true, message: error.message }
   }
 }

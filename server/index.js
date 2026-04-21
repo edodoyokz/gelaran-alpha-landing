@@ -471,6 +471,20 @@ export function createApp() {
       // Prepare submission data for email using helper to extract fields from answers
       const submissionData = buildEmailSubmissionData(submission)
       
+      // Preflight check: ensure QR assets can be generated before sending email
+      try {
+        const { buildVoucherAssets } = await import('./voucherService.js')
+        await buildVoucherAssets({
+          eventName: schema.eventName,
+          submissionId: submission.id,
+          voucherCode: submission.voucherCode,
+        })
+      } catch (qrError) {
+        console.error('[resend-evoucher] QR generation preflight failed:', qrError)
+        res.status(500).json({ message: `Gagal membuat QR code voucher: ${qrError.message}` })
+        return
+      }
+      
       const emailResult = await sendPaymentConfirmedVoucherEmail(emailConfig, schema, submissionData)
       
       if (emailResult.error) {
