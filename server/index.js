@@ -556,7 +556,33 @@ export function createApp() {
       })
     }
 
-    const savedSubmission = await addSubmission(submission)
+    // Insert submission with unique constraint protection
+    let savedSubmission
+    try {
+      savedSubmission = await addSubmission(submission)
+    } catch (error) {
+      // Handle unique constraint violation from database
+      if (error.code === 'DUPLICATE_EMAIL') {
+        return res.status(409).json({ 
+          message: 'Email ini sudah terdaftar. Silakan gunakan email yang berbeda.' 
+        })
+      }
+      if (error.code === 'DUPLICATE_PHONE') {
+        return res.status(409).json({ 
+          message: 'Nomor WhatsApp ini sudah terdaftar. Silakan gunakan nomor yang berbeda.' 
+        })
+      }
+      if (error.code === 'DUPLICATE_ENTRY') {
+        return res.status(409).json({ 
+          message: 'Data ini sudah terdaftar. Silakan gunakan email atau nomor WhatsApp yang berbeda.' 
+        })
+      }
+      // Generic error for other failures
+      console.error('[API] Failed to save submission:', error)
+      return res.status(500).json({ 
+        message: 'Gagal menyimpan pendaftaran. Silakan coba lagi.' 
+      })
+    }
 
     // Send emails if enabled
     try {

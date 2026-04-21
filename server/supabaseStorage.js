@@ -271,6 +271,7 @@ export async function getSupabaseSubmissions() {
 
 /**
  * Insert a single submission and return it.
+ * Throws specific error for unique constraint violations.
  */
 export async function addSupabaseSubmission(submission) {
   try {
@@ -283,12 +284,35 @@ export async function addSupabaseSubmission(submission) {
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      // Check for unique constraint violation (PostgreSQL error code 23505)
+      if (error.code === '23505') {
+        // Parse which field caused the duplicate
+        const errorMessage = error.message || ''
+        if (errorMessage.includes('idx_unique_email') || errorMessage.includes('identity_email')) {
+          const duplicateError = new Error('DUPLICATE_EMAIL')
+          duplicateError.code = 'DUPLICATE_EMAIL'
+          duplicateError.field = 'email'
+          throw duplicateError
+        }
+        if (errorMessage.includes('idx_unique_phone') || errorMessage.includes('identity_phone')) {
+          const duplicateError = new Error('DUPLICATE_PHONE')
+          duplicateError.code = 'DUPLICATE_PHONE'
+          duplicateError.field = 'phone'
+          throw duplicateError
+        }
+        // Generic duplicate error if we can't determine the field
+        const duplicateError = new Error('DUPLICATE_ENTRY')
+        duplicateError.code = 'DUPLICATE_ENTRY'
+        throw duplicateError
+      }
+      throw error
+    }
 
     return rowToSubmission(data)
   } catch (err) {
     console.error('[supabaseStorage] addSupabaseSubmission error:', err)
-    return null
+    throw err
   }
 }
 

@@ -18,6 +18,24 @@ UPDATE submissions
 SET payment_status = 'registered' 
 WHERE payment_status IS NULL;
 
+-- Add voucher_code column for unique e-voucher identifier
+ALTER TABLE submissions 
+ADD COLUMN IF NOT EXISTS voucher_code TEXT;
+
+-- Add voucher_sent_at column to track first voucher email sent
+ALTER TABLE submissions 
+ADD COLUMN IF NOT EXISTS voucher_sent_at TIMESTAMPTZ;
+
+-- Add voucher_last_sent_at column to track last resend
+ALTER TABLE submissions 
+ADD COLUMN IF NOT EXISTS voucher_last_sent_at TIMESTAMPTZ;
+
+-- Create index on voucher_code for efficient lookup
+CREATE INDEX IF NOT EXISTS idx_submissions_voucher_code ON submissions(voucher_code);
+
 -- Add comment to document the columns
 COMMENT ON COLUMN submissions.payment_status IS 'Payment status: registered (default) or paid';
 COMMENT ON COLUMN submissions.payment_confirmed_at IS 'Timestamp when payment was confirmed by admin';
+COMMENT ON COLUMN submissions.voucher_code IS 'Unique voucher code for e-voucher QR code';
+COMMENT ON COLUMN submissions.voucher_sent_at IS 'Timestamp when e-voucher was first sent';
+COMMENT ON COLUMN submissions.voucher_last_sent_at IS 'Timestamp when e-voucher was last sent/resent';

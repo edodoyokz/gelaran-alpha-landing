@@ -222,10 +222,20 @@ export function normalizePhone(phone) {
 
 /**
  * Extract identity fields (email and phone) from submission answers
- * Uses both field ID (stable) and label (fallback) for robustness
+ * Prioritizes pre-computed identity_email and identity_phone fields if available
+ * Falls back to extracting from answers array for backward compatibility
  * Returns normalized values for duplicate detection
  */
 export function extractIdentity(submission) {
+  // Prioritize pre-computed identity fields (already normalized in database)
+  if (submission.identity_email || submission.identity_phone) {
+    return {
+      email: submission.identity_email || null,
+      phone: submission.identity_phone || null,
+    }
+  }
+  
+  // Fallback: extract from answers array (for backward compatibility)
   const answers = submission.answers || []
   
   // Try to find by common field IDs first (stable identifier)
@@ -250,8 +260,8 @@ export function extractIdentity(submission) {
   }
   
   return {
-    email: emailAnswer ? normalizeEmail(emailAnswer.value) : '',
-    phone: phoneAnswer ? normalizePhone(phoneAnswer.value) : '',
+    email: emailAnswer ? normalizeEmail(emailAnswer.value) || null : null,
+    phone: phoneAnswer ? normalizePhone(phoneAnswer.value) || null : null,
   }
 }
 
