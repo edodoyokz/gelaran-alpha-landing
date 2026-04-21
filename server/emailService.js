@@ -458,7 +458,8 @@ export async function sendPaymentConfirmedVoucherEmail(emailConfig, eventData, s
         {
           filename: `voucher-qr-${voucherCode}.png`,
           content: qrCodeBuffer.toString('base64'),
-          content_id: 'voucher-qr',
+          contentType: 'image/png',
+          contentId: 'voucher-qr',
         },
       ],
     })
