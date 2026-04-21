@@ -160,7 +160,7 @@ function formatSubmissionDate(submission) {
 
 async function apiFetch(path, options = {}) {
   const isFormData = options.body instanceof FormData
-  const isStateChanging = ['POST', 'PUT', 'DELETE'].includes(options.method || 'GET')
+  const isStateChanging = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(options.method || 'GET')
 
   const headers = isFormData
     ? options.headers || {}
