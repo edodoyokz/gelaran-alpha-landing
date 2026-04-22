@@ -2454,7 +2454,7 @@ function App() {
               </button>
             </header>
 
-            <div className="scanner-main-content">
+            <div className={`scanner-main-content${scannerResult ? ' has-result' : ''}`}>
               <div className="camera-section">
                 <ScannerCamera
                   onScan={handleCameraScan}
