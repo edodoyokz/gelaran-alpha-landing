@@ -226,8 +226,12 @@ function App() {
   const [manualScannerInput, setManualScannerInput] = useState('')
   const [scannerLoading, setScannerLoading] = useState(false)
   const [scannerResult, setScannerResult] = useState(null)
+  const [isScannerOverlayOpen, setIsScannerOverlayOpen] = useState(false)
   const scannerAutoClearTimeoutRef = useRef(null)
   const scannerInputRef = useRef(null)
+  const isScannerOverlayOpenRef = useRef(false)
+  const scannerOverlayRef = useRef(null)
+  const scannerTriggerRef = useRef(null)
 
   const fileInputRef = useRef(null)
   const pageSize = 5
@@ -1045,23 +1049,12 @@ function App() {
       const data = await response.json()
 
       if (data.success && data.status === 'accepted') {
-        // Success - check-in accepted
-        setScannerResult({
-          status: 'accepted',
-          reason: 'Peserta berhasil check-in',
-          submission: data.submission,
-          checkedInAt: data.checkedInAt,
-          scanValue: scanValue.trim()
-        })
-
-        // Update submissions state in-place (like markAsPaid pattern)
+        // Always sync admin data regardless of overlay state
         setSubmissions(prev => prev.map(sub =>
           sub.id === data.submission.id
             ? { ...sub, checkInStatus: 'checked_in', checkedInAt: data.checkedInAt }
             : sub
         ))
-
-        // Update selectedParticipant if it's the same submission
         if (selectedParticipant?.id === data.submission.id) {
           setSelectedParticipant(prev => ({
             ...prev,
@@ -1069,30 +1062,50 @@ function App() {
             checkedInAt: data.checkedInAt
           }))
         }
+
+        // Only update scanner UI if overlay is still open
+        if (isScannerOverlayOpenRef.current) {
+          setScannerResult({
+            status: 'accepted',
+            reason: 'Peserta berhasil check-in',
+            submission: data.submission,
+            checkedInAt: data.checkedInAt,
+            scanValue: scanValue.trim()
+          })
+        }
       } else {
-        // Rejected
-        setScannerResult({
-          status: 'rejected',
-          reason: data.reason || 'Peserta tidak dapat check-in',
-          submission: data.submission || null,
-          checkedInAt: data.checkedInAt || null,
-          scanValue: scanValue.trim()
-        })
+        if (isScannerOverlayOpenRef.current) {
+          setScannerResult({
+            status: 'rejected',
+            reason: data.reason || 'Peserta tidak dapat check-in',
+            submission: data.submission || null,
+            checkedInAt: data.checkedInAt || null,
+            scanValue: scanValue.trim()
+          })
+        }
       }
 
       // Auto-clear result after 5 seconds (but don't refocus for camera scans)
-      scannerAutoClearTimeoutRef.current = setTimeout(() => {
-        setScannerResult(null)
-        setScannerInput('')
-        setManualScannerInput('')
-        // Only refocus text input if not using camera
-        if (source !== 'camera') {
-          scannerInputRef.current?.focus()
-        }
-      }, 5000)
+      if (isScannerOverlayOpenRef.current) {
+        scannerAutoClearTimeoutRef.current = setTimeout(() => {
+          if (!isScannerOverlayOpenRef.current) return
+          setScannerResult(null)
+          setScannerInput('')
+          setManualScannerInput('')
+          if (source !== 'camera') {
+            scannerInputRef.current?.focus()
+          }
+        }, 5000)
+      }
 
     } catch (error) {
       console.error('Scanner error:', error)
+      
+      // Guard: only update UI if overlay is still open
+      if (!isScannerOverlayOpenRef.current) {
+        return
+      }
+      
       setScannerResult({
         status: 'error',
         reason: 'Terjadi kesalahan saat memproses scan',
@@ -1103,6 +1116,7 @@ function App() {
 
       // Auto-clear error after 5 seconds
       scannerAutoClearTimeoutRef.current = setTimeout(() => {
+        if (!isScannerOverlayOpenRef.current) return
         setScannerResult(null)
         setScannerInput('')
         setManualScannerInput('')
@@ -1143,9 +1157,28 @@ function App() {
     scannerInputRef.current?.focus()
   }, [])
 
+  const openScannerOverlay = useCallback(() => {
+    isScannerOverlayOpenRef.current = true
+    setIsScannerOverlayOpen(true)
+  }, [])
+
+  const closeScannerOverlay = useCallback(() => {
+    isScannerOverlayOpenRef.current = false
+    if (scannerAutoClearTimeoutRef.current) {
+      clearTimeout(scannerAutoClearTimeoutRef.current)
+      scannerAutoClearTimeoutRef.current = null
+    }
+    setScannerResult(null)
+    setScannerInput('')
+    setManualScannerInput('')
+    setScannerLoading(false)
+    setIsScannerOverlayOpen(false)
+    scannerTriggerRef.current?.focus()
+  }, [])
+
   // Scanner auto-submit effect (for external scanner devices)
   useEffect(() => {
-    if (activeView !== 'scanner' || !scannerInput.trim()) return
+    if (!isScannerOverlayOpen || !scannerInput.trim()) return
 
     const timeout = setTimeout(() => {
       if (scannerInput.trim()) {
@@ -1154,21 +1187,74 @@ function App() {
     }, 500)
 
     return () => clearTimeout(timeout)
-  }, [scannerInput, activeView, submitGateScan])
+  }, [scannerInput, isScannerOverlayOpen, submitGateScan])
 
-  // Scanner tab focus and cleanup
+  // Scanner overlay focus and cleanup
   useEffect(() => {
-    if (activeView === 'scanner') {
+    if (isScannerOverlayOpen) {
       scannerInputRef.current?.focus()
     }
+  }, [isScannerOverlayOpen])
 
+  // Handle Escape key to close scanner overlay
+  useEffect(() => {
+    if (!isScannerOverlayOpen) return
+
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        closeScannerOverlay()
+      }
+    }
+
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [isScannerOverlayOpen, closeScannerOverlay])
+
+  // Focus trap for scanner overlay
+  useEffect(() => {
+    if (!isScannerOverlayOpen) return
+
+    const overlay = scannerOverlayRef.current
+    if (!overlay) return
+
+    const focusableSelectors = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+    const handleTab = (e) => {
+      if (e.key !== 'Tab') return
+      const focusable = Array.from(overlay.querySelectorAll(focusableSelectors))
+      if (!focusable.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (!overlay.contains(document.activeElement)) {
+        e.preventDefault()
+        first.focus()
+        return
+      }
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleTab)
+    return () => document.removeEventListener('keydown', handleTab)
+  }, [isScannerOverlayOpen])
+
+  // Global cleanup for scanner timeout on unmount
+  useEffect(() => {
     return () => {
       if (scannerAutoClearTimeoutRef.current) {
         clearTimeout(scannerAutoClearTimeoutRef.current)
-        scannerAutoClearTimeoutRef.current = null
       }
     }
-  }, [activeView])
+  }, [])
 
   if (loading) {
     return (
@@ -1184,127 +1270,7 @@ function App() {
     )
   }
 
-  if (activeView === 'scanner') {
-    return (
-      <main className="scanner-fullscreen-layout">
-        <header className="scanner-header">
-          <div className="scanner-brand">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="24" height="24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
-            </svg>
-            <h2>Gate Scanner - {schema.eventName}</h2>
-          </div>
-          <button
-            className="ghost-btn close-scanner-btn"
-            onClick={() => setActiveView('admin')}
-          >
-            Kembali ke Admin
-          </button>
-        </header>
 
-        <div className="scanner-main-content">
-          <div className="camera-section">
-            <ScannerCamera
-              onScan={handleCameraScan}
-              isActive={activeView === 'scanner'}
-              dedupeCooldown={2500}
-            />
-          </div>
-
-          <aside className="scanner-side-panel">
-            {scannerResult ? (
-              <div className="scanner-result">
-                <div className={`scanner-status ${scannerResult.status === 'accepted' ? 'success' : 'rejected'}`}>
-                  <div className="scanner-icon">
-                    {scannerResult.status === 'accepted' ? '✓' : '✗'}
-                  </div>
-                  <h4 className="scanner-status-text">
-                    {scannerResult.status === 'accepted' ? 'Check-in Berhasil' :
-                     scannerResult.status === 'error' ? 'Error' : 'Check-in Ditolak'}
-                  </h4>
-                  <p className="scanner-reason">{scannerResult.reason}</p>
-                  {scannerResult.checkedInAt && (
-                    <p className="scanner-timestamp">
-                      {new Date(scannerResult.checkedInAt).toLocaleString('id-ID')}
-                    </p>
-                  )}
-                </div>
-                {scannerResult.submission && (
-                  <div className="scanner-participant-info">
-                    <h5>Info Peserta</h5>
-                    <div className="scanner-info-grid">
-                      {(scannerResult.submission.answers || []).map((answer, idx) => (
-                        <div key={idx} className="scanner-info-item">
-                          <strong>{answer.label}:</strong> {answer.value}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <button
-                  className="btn-secondary full-width mt-2"
-                  onClick={resetScannerResult}
-                >
-                  Scan Berikutnya
-                </button>
-              </div>
-            ) : (
-              <div className="scanner-idle-state">
-                <div className="pulse-circle"></div>
-                <p>Menunggu scan QR code...</p>
-              </div>
-            )}
-
-            <div className="scanner-fallback-section">
-              <h4 className="fallback-title">Manual Input</h4>
-
-              <div className="scanner-input-section">
-                <label className="field-block">
-                  <span>Hardware Scanner</span>
-                  <input
-                    ref={scannerInputRef}
-                    type="text"
-                    value={scannerInput}
-                    onChange={handleScannerInputChange}
-                    placeholder="Arahkan scanner ke QR..."
-                    autoComplete="off"
-                    disabled={scannerLoading}
-                  />
-                </label>
-              </div>
-
-              <div className="scanner-divider">
-                <span>atau</span>
-              </div>
-
-              <div className="scanner-manual-section">
-                <form onSubmit={handleManualScannerSubmit}>
-                  <label className="field-block">
-                    <span>Input ID/Email</span>
-                    <input
-                      type="text"
-                      value={manualScannerInput}
-                      onChange={(e) => setManualScannerInput(e.target.value)}
-                      placeholder="Ketik manual..."
-                      autoComplete="off"
-                      disabled={scannerLoading}
-                    />
-                  </label>
-                  <button
-                    type="submit"
-                    className="btn-primary full-width"
-                    disabled={scannerLoading || !manualScannerInput.trim()}
-                  >
-                    {scannerLoading ? 'Memproses...' : 'Submit'}
-                  </button>
-                </form>
-              </div>
-            </div>
-          </aside>
-        </div>
-      </main>
-    )
-  }
 
   return (
     <div className={activeView === 'admin' ? "app-shell admin-mode" : "app-shell"}>
@@ -1537,11 +1503,12 @@ function App() {
                 Email Settings
               </button>
               <button
-                className="sidebar-btn"
-                onClick={() => setActiveView('scanner')}
+                ref={scannerTriggerRef}
+                className={`sidebar-btn${isScannerOverlayOpen ? ' active' : ''}`}
+                onClick={openScannerOverlay}
               >
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
-                Gate Scanner (Layar Penuh)
+                {isScannerOverlayOpen ? 'Scanner Aktif' : 'Gate Scanner'}
               </button>
             </nav>
 
@@ -2460,6 +2427,127 @@ function App() {
             <p className="helper-text">Masukkan kredensial admin yang telah dikonfigurasi.</p>
           </section>
         </main>
+      )}
+      {isScannerOverlayOpen && (
+        <div className="scanner-overlay-backdrop" onClick={closeScannerOverlay}>
+          <div 
+            ref={scannerOverlayRef}
+            className="scanner-overlay" 
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="scanner-title"
+          >
+            <header className="scanner-header">
+              <div className="scanner-brand">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="24" height="24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+                </svg>
+                <h2 id="scanner-title">Gate Scanner — {schema.eventName}</h2>
+                <span className="scanner-active-badge">Aktif</span>
+              </div>
+              <button className="ghost-btn close-scanner-btn" onClick={closeScannerOverlay} aria-label="Tutup scanner">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18" height="18">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+                Tutup Scanner
+              </button>
+            </header>
+
+            <div className="scanner-main-content">
+              <div className="camera-section">
+                <ScannerCamera
+                  onScan={handleCameraScan}
+                  isActive={isScannerOverlayOpen}
+                  dedupeCooldown={2500}
+                />
+              </div>
+
+              <aside className="scanner-side-panel">
+                {scannerResult ? (
+                  <div className="scanner-result">
+                    <div className={`scanner-status ${scannerResult.status === 'accepted' ? 'success' : 'rejected'}`}>
+                      <div className="scanner-icon">
+                        {scannerResult.status === 'accepted' ? '✓' : '✗'}
+                      </div>
+                      <h4 className="scanner-status-text">
+                        {scannerResult.status === 'accepted' ? 'Check-in Berhasil' :
+                         scannerResult.status === 'error' ? 'Error' : 'Check-in Ditolak'}
+                      </h4>
+                      <p className="scanner-reason">{scannerResult.reason}</p>
+                      {scannerResult.checkedInAt && (
+                        <p className="scanner-timestamp">
+                          {new Date(scannerResult.checkedInAt).toLocaleString('id-ID')}
+                        </p>
+                      )}
+                    </div>
+                    {scannerResult.submission && (
+                      <div className="scanner-participant-info">
+                        <h5>Info Peserta</h5>
+                        <div className="scanner-info-grid">
+                          {(scannerResult.submission.answers || []).map((answer, idx) => (
+                            <div key={idx} className="scanner-info-item">
+                              <strong>{answer.label}:</strong> {answer.value}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <button className="btn-secondary full-width mt-2" onClick={resetScannerResult}>
+                      Scan Berikutnya
+                    </button>
+                  </div>
+                ) : (
+                  <div className="scanner-idle-state">
+                    <div className="pulse-circle"></div>
+                    <p>Menunggu scan QR code...</p>
+                  </div>
+                )}
+
+                <div className="scanner-fallback-section">
+                  <h4 className="fallback-title">Manual Input</h4>
+                  <div className="scanner-input-section">
+                    <label className="field-block">
+                      <span>Hardware Scanner</span>
+                      <input
+                        ref={scannerInputRef}
+                        type="text"
+                        value={scannerInput}
+                        onChange={handleScannerInputChange}
+                        placeholder="Arahkan scanner ke QR..."
+                        autoComplete="off"
+                        disabled={scannerLoading}
+                      />
+                    </label>
+                  </div>
+                  <div className="scanner-divider"><span>atau</span></div>
+                  <div className="scanner-manual-section">
+                    <form onSubmit={handleManualScannerSubmit}>
+                      <label className="field-block">
+                        <span>Input ID/Email</span>
+                        <input
+                          type="text"
+                          value={manualScannerInput}
+                          onChange={(e) => setManualScannerInput(e.target.value)}
+                          placeholder="Ketik manual..."
+                          autoComplete="off"
+                          disabled={scannerLoading}
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        className="btn-primary full-width"
+                        disabled={scannerLoading || !manualScannerInput.trim()}
+                      >
+                        {scannerLoading ? 'Memproses...' : 'Submit'}
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
