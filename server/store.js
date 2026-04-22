@@ -378,6 +378,7 @@ export async function checkDuplicateSubmission(newSubmission) {
  * Supports multiple QR payload formats:
  * - Raw voucher code (e.g., "ABC12345")
  * - Raw submission ID / UUID
+ * - Structured payload (e.g., "event:...|participant:...|voucher:...")
  * - URL with query parameters or path segments containing identifiers
  * 
  * Returns an object with:
@@ -395,31 +396,77 @@ export function parseScanValue(scanValue) {
   const candidates = []
   let parsedFrom = 'raw'
   
-  // Try to parse as URL
-  try {
-    const url = new URL(trimmed)
-    parsedFrom = 'url'
+  // Try to parse as structured payload (key:value|key:value)
+  // Only treat as structured if it has pipe separator and recognized identifier keys
+  // This prevents false positives with URLs that happen to contain pipes
+  if (trimmed.includes('|') && trimmed.includes(':') && !trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+    const segments = trimmed.split('|')
+    const structuredData = {}
+    // Only identifier keys trigger structured mode (not metadata like 'event')
+    const recognizedKeys = ['voucher', 'participant', 'submission', 'submissionid']
+    let hasRecognizedKey = false
     
-    // Check common query parameter names for identifiers
-    const queryParams = ['voucherCode', 'voucher', 'code', 'submissionId', 'submission', 'id']
-    for (const param of queryParams) {
-      const value = url.searchParams.get(param)
-      if (value && value.trim()) {
-        candidates.push(value.trim())
+    for (const segment of segments) {
+      const colonIndex = segment.indexOf(':')
+      if (colonIndex > 0) {
+        // Split only on first colon to preserve values with colons
+        const key = segment.substring(0, colonIndex).trim().toLowerCase()
+        const value = segment.substring(colonIndex + 1).trim()
+        
+        if (key && value) {
+          structuredData[key] = value
+          // Check if this is a recognized key for structured payloads
+          if (recognizedKeys.includes(key)) {
+            hasRecognizedKey = true
+          }
+        }
       }
     }
     
-    // Check pathname segments (last non-empty segment might be an identifier)
-    const pathSegments = url.pathname.split('/').filter(s => s.trim())
-    if (pathSegments.length > 0) {
-      const lastSegment = pathSegments[pathSegments.length - 1]
-      if (lastSegment && lastSegment.trim()) {
-        candidates.push(lastSegment.trim())
+    // Only treat as structured payload if we found at least one recognized key
+    if (hasRecognizedKey) {
+      parsedFrom = 'structured-payload'
+      
+      // Priority order: voucher, then participant/submission
+      if (structuredData.voucher) {
+        candidates.push(structuredData.voucher)
+      }
+      if (structuredData.participant) {
+        candidates.push(structuredData.participant)
+      }
+      if (structuredData.submission || structuredData.submissionid) {
+        candidates.push(structuredData.submission || structuredData.submissionid)
       }
     }
-  } catch (urlError) {
-    // Not a valid URL, treat as raw identifier
-    parsedFrom = 'raw'
+  }
+  
+  // Try to parse as URL (only if not already parsed as structured payload)
+  if (parsedFrom !== 'structured-payload') {
+    try {
+      const url = new URL(trimmed)
+      parsedFrom = 'url'
+      
+      // Check common query parameter names for identifiers
+      const queryParams = ['voucherCode', 'voucher', 'code', 'submissionId', 'submission', 'id']
+      for (const param of queryParams) {
+        const value = url.searchParams.get(param)
+        if (value && value.trim()) {
+          candidates.push(value.trim())
+        }
+      }
+      
+      // Check pathname segments (last non-empty segment might be an identifier)
+      const pathSegments = url.pathname.split('/').filter(s => s.trim())
+      if (pathSegments.length > 0) {
+        const lastSegment = pathSegments[pathSegments.length - 1]
+        if (lastSegment && lastSegment.trim()) {
+          candidates.push(lastSegment.trim())
+        }
+      }
+    } catch (urlError) {
+      // Not a valid URL, treat as raw identifier
+      parsedFrom = 'raw'
+    }
   }
   
   // Always include the raw value as a candidate (fallback)
