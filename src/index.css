@@ -57,7 +57,7 @@ img {
   color: #1f4b47;
   font-size: 1.1rem;
   font-weight: 600;
-  background: 
+  background:
     radial-gradient(circle at top left, rgba(61, 180, 170, 0.1), transparent 30%),
     linear-gradient(180deg, #f5fbfb 0%, #fffdfa 35%, #f6f9f8 100%);
 }
@@ -87,9 +87,9 @@ img {
   position: relative;
   overflow: hidden;
   border-radius: 40px;
-  background: linear-gradient(90deg, 
-    rgba(239, 123, 69, 0.1) 0%, 
-    rgba(239, 123, 69, 0.05) 50%, 
+  background: linear-gradient(90deg,
+    rgba(239, 123, 69, 0.1) 0%,
+    rgba(239, 123, 69, 0.05) 50%,
     rgba(239, 123, 69, 0.1) 100%);
 }
 
@@ -1387,7 +1387,7 @@ select:focus {
     flex-direction: row;
     align-items: flex-end;
   }
-  
+
   .scanner-manual-section .btn-primary {
     width: auto;
     white-space: nowrap;
@@ -1614,18 +1614,372 @@ select:focus {
   .camera-preview-container {
     border-radius: 8px;
   }
-  
+
   .scan-frame {
     width: 200px;
     height: 200px;
   }
-  
+
   .scan-instruction {
     font-size: 0.9rem;
     padding: 6px 12px;
   }
-  
+
   .scanner-fallback-section {
     padding: 16px;
+  }
+}
+
+/* Scanner Fullscreen Redesign */
+.scanner-fullscreen-layout {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background-color: #000;
+  z-index: 9999;
+  overflow: hidden;
+  font-family: inherit;
+}
+
+.scanner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background-color: rgba(18, 18, 18, 0.9);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.scanner-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.scanner-brand h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: white;
+}
+
+.close-scanner-btn {
+  color: #ef4444 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  background: rgba(239, 68, 68, 0.1) !important;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid;
+}
+.close-scanner-btn:hover {
+  background: rgba(239, 68, 68, 0.2) !important;
+  color: #f87171 !important;
+}
+
+.scanner-main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.camera-section {
+  flex: 1;
+  position: relative;
+  background-color: #050505;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.scanner-fullscreen-layout .scanner-camera {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  height: 100%;
+}
+
+.scanner-fullscreen-layout .camera-preview-container {
+  max-width: none;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+  background: #000;
+}
+
+.scanner-fullscreen-layout .camera-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scanner-side-panel {
+  width: 400px;
+  background-color: #121212;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  overflow-y: auto;
+  color: white;
+}
+
+.scanner-side-panel .scanner-result {
+  background-color: #1a1a1a;
+  border: 1px solid #333;
+  margin-top: 0;
+  color: white;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.scanner-side-panel .scanner-status {
+  text-align: center;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 2px solid transparent;
+}
+
+.scanner-side-panel .scanner-status.success {
+  background-color: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+.scanner-side-panel .scanner-status.success .scanner-status-text {
+  color: #34d399;
+}
+.scanner-side-panel .scanner-status.success .scanner-icon {
+  color: #34d399;
+}
+
+.scanner-side-panel .scanner-status.rejected {
+  background-color: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+.scanner-side-panel .scanner-status.rejected .scanner-status-text {
+  color: #f87171;
+}
+.scanner-side-panel .scanner-status.rejected .scanner-icon {
+  color: #f87171;
+}
+
+.scanner-side-panel .scanner-reason,
+.scanner-side-panel .scanner-timestamp {
+  color: #9ca3af;
+  margin: 4px 0;
+}
+
+.scanner-side-panel .scanner-participant-info {
+  background-color: #1f1f1f;
+  border: 1px solid #333;
+  color: #e5e7eb;
+  padding: 16px;
+  border-radius: 8px;
+}
+.scanner-side-panel .scanner-participant-info h5 {
+  color: #fff;
+  margin: 0 0 12px 0;
+}
+.scanner-side-panel .scanner-info-item {
+  border-bottom: 1px solid #333;
+  padding: 8px 0;
+}
+.scanner-side-panel .scanner-info-item strong {
+  color: #9ca3af;
+}
+
+.scanner-side-panel .btn-secondary {
+  background-color: #374151;
+  color: white;
+  border: 1px solid #4b5563;
+  padding: 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.scanner-side-panel .btn-secondary:hover {
+  background-color: #4b5563;
+}
+
+.scanner-side-panel .fallback-title {
+  color: #e5e7eb;
+  margin: 0 0 16px 0;
+}
+
+.scanner-side-panel .scanner-fallback-section {
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  margin-top: auto;
+}
+
+.scanner-idle-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: #6b7280;
+  gap: 16px;
+  min-height: 200px;
+}
+
+.pulse-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background-color: rgba(52, 211, 153, 0.1);
+  border: 2px solid rgba(52, 211, 153, 0.5);
+  animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.1;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+}
+
+.scanner-side-panel .field-block span {
+  color: #9ca3af;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.scanner-side-panel input[type="text"] {
+  background-color: #1f1f1f;
+  border: 1px solid #333;
+  color: white;
+  width: 100%;
+  padding: 10px;
+  border-radius: 6px;
+}
+.scanner-side-panel input[type="text"]::placeholder {
+  color: #6b7280;
+}
+.scanner-side-panel input[type="text"]:focus {
+  border-color: #34d399;
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.2);
+  outline: none;
+}
+
+.scanner-side-panel .scanner-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: #6b7280;
+  margin: 16px 0;
+}
+.scanner-side-panel .scanner-divider::before,
+.scanner-side-panel .scanner-divider::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px solid #333;
+}
+.scanner-side-panel .scanner-divider span {
+  padding: 0 16px;
+}
+
+.scanner-side-panel .btn-primary {
+  background-color: #10b981;
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  margin-top: 12px;
+}
+.scanner-side-panel .btn-primary:hover:not(:disabled) {
+  background-color: #059669;
+}
+.scanner-side-panel .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.mt-2 {
+  margin-top: 16px;
+}
+
+/* Adjust camera controls specifically for fullscreen */
+.scanner-fullscreen-layout .camera-controls {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 8px 12px;
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+  color: white;
+}
+
+.scanner-fullscreen-layout .camera-select-label span {
+  color: white;
+}
+
+.scanner-fullscreen-layout .camera-select {
+  background: #222;
+  color: white;
+  border: 1px solid #444;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.scanner-fullscreen-layout .camera-status-badge {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  z-index: 10;
+}
+
+.scanner-fullscreen-layout .badge-ready {
+  background: rgba(16, 185, 129, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .scanner-main-content {
+    flex-direction: column;
+  }
+
+  .scanner-side-panel {
+    width: 100%;
+    height: 50dvh;
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 16px;
+  }
+
+  .camera-section {
+    height: 50dvh;
+    flex: none;
+  }
+
+  .scanner-header h2 {
+    font-size: 1rem;
   }
 }
