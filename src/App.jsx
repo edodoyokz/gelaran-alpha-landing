@@ -49,6 +49,11 @@ const defaultSchema = {
       options: '',
     },
   ],
+  registrationSettings: {
+    mode: 'auto',
+    paidQuotaLimit: 0,
+    closedMessage: 'Pendaftaran sudah ditutup. Nantikan event kami berikutnya.',
+  },
 }
 
 const fieldTypes = [
@@ -113,6 +118,10 @@ function normalizeSchema(inputSchema = {}) {
     fields: ensureArray(inputSchema?.fields, defaultSchema.fields),
     highlights: ensureArray(inputSchema?.highlights, defaultSchema.highlights),
     features: ensureArray(inputSchema?.features, defaultSchema.features),
+    registrationSettings: {
+      ...defaultSchema.registrationSettings,
+      ...(inputSchema?.registrationSettings || {}),
+    },
   }
 }
 
@@ -195,6 +204,12 @@ function App() {
     setSchema(normalizeSchema(fetchedSchema))
   }, [])
   const [submissions, setSubmissions] = useState([])
+  const [registrationStatus, setRegistrationStatus] = useState({
+    isClosed: false,
+    paidCount: 0,
+    paidQuotaLimit: 0,
+    closedMessage: '',
+  })
   const [formData, setFormData] = useState({})
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
@@ -256,6 +271,20 @@ function App() {
     }
   }, [])
 
+  const fetchRegistrationStatus = useCallback(async (signal) => {
+    const registrationStatusResponse = await fetch(apiUrl('/api/registration-status'), {
+      signal,
+    })
+
+    if (!registrationStatusResponse.ok) {
+      throw new Error(`Failed to fetch registration status (${registrationStatusResponse.status})`)
+    }
+
+    const registrationStatusData = await registrationStatusResponse.json()
+    setRegistrationStatus(registrationStatusData)
+    return registrationStatusData
+  }, [])
+
   useEffect(() => {
     const controller = new AbortController()
 
@@ -264,16 +293,39 @@ function App() {
         const schemaResponse = await fetch(apiUrl('/api/schema'), {
           signal: controller.signal
         })
+
+        if (!schemaResponse.ok) {
+          throw new Error(`Failed to fetch schema (${schemaResponse.status})`)
+        }
+
         const schemaData = await schemaResponse.json()
         safeSetSchema(schemaData)
       } catch (err) {
         if (err.name !== 'AbortError') {
-          logError(err, { context: 'loadPublicData', url: apiUrl('/api/schema') })
+          logError(err, { context: 'loadPublicData:schema' })
           setMessage('Gagal memuat data event dari server.')
         }
-      } finally {
         setLoading(false)
+        return
       }
+
+      // Fetch registration status separately (fail-safe: close registration if status check fails)
+      try {
+        await fetchRegistrationStatus(controller.signal)
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          logError(err, { context: 'loadPublicData:registrationStatus' })
+          // Fail-safe: assume closed if status cannot be verified
+          setRegistrationStatus({
+            isClosed: true,
+            paidCount: 0,
+            paidQuotaLimit: 0,
+            closedMessage: 'Status pendaftaran sedang tidak dapat diverifikasi. Silakan coba lagi dalam beberapa saat.',
+          })
+        }
+      }
+
+      setLoading(false)
     }
 
     loadPublicData()
@@ -282,15 +334,38 @@ function App() {
     return () => {
       controller.abort()
     }
-  }, [checkSession, safeSetSchema])
+  }, [checkSession, safeSetSchema, fetchRegistrationStatus])
+
+  // Poll registration status for public view
+  useEffect(() => {
+    if (activeView !== 'public') return
+
+    const intervalId = setInterval(() => {
+      fetchRegistrationStatus().catch((err) => {
+        if (err?.name === 'AbortError') return
+        logError(err, { context: 'pollRegistrationStatus' })
+        setRegistrationStatus({
+          isClosed: true,
+          paidCount: 0,
+          paidQuotaLimit: 0,
+          closedMessage: 'Status pendaftaran sedang tidak dapat diverifikasi. Silakan coba lagi dalam beberapa saat.',
+        })
+      })
+    }, 20000) // Poll every 20 seconds
+
+    return () => {
+      clearInterval(intervalId)
+    }
+  }, [activeView, fetchRegistrationStatus])
 
   const loadAdminData = useCallback(async () => {
     setSubmissionsLoading(true)
     try {
-      const [schemaResponse, submissionsResponse, emailConfigResponse] = await Promise.all([
+      const [schemaResponse, submissionsResponse, emailConfigResponse, registrationStatusResponse] = await Promise.all([
         apiFetch('/api/schema'),
         apiFetch('/api/submissions'),
         apiFetch('/api/email-config'),
+        apiFetch('/api/registration-status'),
       ])
 
       if (submissionsResponse.status === 401) {
@@ -299,15 +374,17 @@ function App() {
         return
       }
 
-      const [schemaData, submissionsData, emailConfigData] = await Promise.all([
+      const [schemaData, submissionsData, emailConfigData, registrationStatusData] = await Promise.all([
         schemaResponse.json(),
         submissionsResponse.json(),
         emailConfigResponse.json(),
+        registrationStatusResponse.json(),
       ])
 
       safeSetSchema(schemaData)
       setSubmissions(submissionsData)
       setEmailConfig(emailConfigData)
+      setRegistrationStatus(registrationStatusData)
     } catch (err) {
       logError(err, { context: 'loadAdminData' })
       setMessage('Gagal memuat data admin dari server.')
@@ -392,6 +469,10 @@ function App() {
 
   const posterUrl = useMemo(() => getPosterUrl(schema.poster), [schema.poster])
 
+  // Use registration status from server
+  const paidCount = registrationStatus.paidCount
+  const isRegistrationClosed = registrationStatus.isClosed
+
   async function saveSchemaToServer(nextSchema) {
     setSaving(true)
     try {
@@ -415,6 +496,18 @@ function App() {
 
       const savedSchema = await response.json()
       safeSetSchema(savedSchema)
+      
+      // Refetch registration status after schema save
+      try {
+        const statusResponse = await apiFetch('/api/registration-status')
+        if (statusResponse.ok) {
+          const statusData = await statusResponse.json()
+          setRegistrationStatus(statusData)
+        }
+      } catch (err) {
+        logError(err, { context: 'saveSchemaToServer:refetchStatus' })
+      }
+      
       setMessage('Perubahan event berhasil disimpan ke server.')
       return true
     } catch (error) {
@@ -515,6 +608,19 @@ function App() {
     }))
   }
 
+  function updateRegistrationSettings(key, value) {
+    // Normalize paidQuotaLimit to number
+    const normalizedValue = key === 'paidQuotaLimit' ? Number(value) || 0 : value
+    
+    setSchema((current) => ({
+      ...current,
+      registrationSettings: {
+        ...(current.registrationSettings || defaultSchema.registrationSettings),
+        [key]: normalizedValue,
+      },
+    }))
+  }
+
   async function handlePosterUpload(event) {
     const file = event.target.files?.[0]
     if (!file) return
@@ -602,6 +708,22 @@ function App() {
 
     try {
       setIsSubmitting(true)
+
+      // Validate registration status before submitting
+      try {
+        const statusResponse = await fetch(apiUrl('/api/registration-status'))
+        if (statusResponse.ok) {
+          const statusData = await statusResponse.json()
+          if (statusData.isClosed) {
+            setMessage(statusData.closedMessage || 'Pendaftaran sudah ditutup.')
+            setRegistrationStatus(statusData)
+            return
+          }
+        }
+      } catch (err) {
+        logError(err, { context: 'handleSubmit:validateStatus' })
+        // Continue with submission if validation fails
+      }
 
       const response = await apiFetch('/api/submissions', {
         method: 'POST',
@@ -1328,9 +1450,15 @@ function App() {
               </div>
 
               <div className="hero-actions">
-                <a href="#registration-form" className="primary-btn">
-                  Daftar Sekarang
-                </a>
+                {isRegistrationClosed ? (
+                  <a href="#registration-form" className="primary-btn" style={{ opacity: 0.6, cursor: 'default' }}>
+                    Pendaftaran Ditutup
+                  </a>
+                ) : (
+                  <a href="#registration-form" className="primary-btn">
+                    Daftar Sekarang
+                  </a>
+                )}
               </div>
             </div>
 
@@ -1377,10 +1505,15 @@ function App() {
             <article className="form-panel" id="registration-form">
               <div className="panel-head">
                 <span className="eyebrow">Form pendaftaran</span>
-                <h3>Isi data peserta</h3>
+                <h3>{isRegistrationClosed ? 'Pendaftaran Ditutup' : 'Isi data peserta'}</h3>
               </div>
 
-              <form className="registration-form" onSubmit={handleSubmit}>
+              {isRegistrationClosed ? (
+                <div className="registration-closed-message">
+                  <p>{registrationStatus.closedMessage || defaultSchema.registrationSettings.closedMessage}</p>
+                </div>
+              ) : (
+                <form className="registration-form" onSubmit={handleSubmit}>
                 {/* Anti-bot honeypot field */}
                 <div style={{ position: 'absolute', left: '-9999px', opacity: 0, height: 0, overflow: 'hidden' }} aria-hidden="true" tabIndex={-1}>
                   <label>
@@ -1457,6 +1590,7 @@ function App() {
                   {isSubmitting ? 'Mengirim...' : 'Kirim Pendaftaran'}
                 </button>
               </form>
+              )}
 
               {message ? <p className="form-message">{message}</p> : null}
             </article>
@@ -1602,6 +1736,56 @@ function App() {
                     hidden
                     onChange={handlePosterUpload}
                   />
+                </div>
+
+                <div className="upload-card">
+                  <div>
+                    <h4>Kontrol Pendaftaran</h4>
+                    <p>Atur mode pendaftaran dan batas kuota peserta lunas.</p>
+                  </div>
+                  <div className="admin-form-grid settings-grid">
+                    <label className="field-block">
+                      <span>Mode Pendaftaran</span>
+                      <select
+                        value={schema.registrationSettings?.mode || 'auto'}
+                        onChange={(e) => updateRegistrationSettings('mode', e.target.value)}
+                      >
+                        <option value="auto">Otomatis (berdasarkan kuota)</option>
+                        <option value="open">Paksa Buka</option>
+                        <option value="closed">Paksa Tutup</option>
+                      </select>
+                    </label>
+                    <label className="field-block">
+                      <span>Batas Peserta Lunas (0 = tidak aktif)</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={schema.registrationSettings?.paidQuotaLimit || 0}
+                        onChange={(e) => updateRegistrationSettings('paidQuotaLimit', e.target.value)}
+                      />
+                    </label>
+                    <label className="field-block field-full">
+                      <span>Pesan Penutupan</span>
+                      <input
+                        type="text"
+                        value={schema.registrationSettings?.closedMessage || ''}
+                        onChange={(e) => updateRegistrationSettings('closedMessage', e.target.value)}
+                        placeholder="Pendaftaran sudah ditutup. Nantikan event kami berikutnya."
+                      />
+                    </label>
+                  </div>
+                  <div className="analytics-strip" style={{ marginTop: '16px' }}>
+                    <article className="analytics-card">
+                      <span>Peserta Lunas Saat Ini</span>
+                      <strong>{paidCount} / {registrationStatus.paidQuotaLimit || 0}</strong>
+                    </article>
+                    <article className="analytics-card">
+                      <span>Status Form Publik</span>
+                      <strong style={{ color: isRegistrationClosed ? '#ef4444' : '#10b981' }}>
+                        {isRegistrationClosed ? 'Ditutup' : 'Buka'}
+                      </strong>
+                    </article>
+                  </div>
                 </div>
 
                 <div className="admin-form-section">

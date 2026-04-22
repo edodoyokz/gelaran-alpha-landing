@@ -28,6 +28,36 @@ import { isSupabaseEnabled } from './supabaseStorage.js'
 import { sendParticipantEmail, sendAdminNotification, sendTestEmail, sendPaymentConfirmedVoucherEmail } from './emailService.js'
 import { buildEmailSubmissionData } from './emailPayload.js'
 
+// Helper function to determine registration status
+function calculateRegistrationStatus(schema, submissions) {
+  const paidCount = submissions.filter(sub => sub.paymentStatus === 'paid').length
+  const settings = schema.registrationSettings || {
+    mode: 'auto',
+    paidQuotaLimit: 0,
+    closedMessage: 'Pendaftaran sudah ditutup. Nantikan event kami berikutnya.',
+  }
+  
+  const mode = settings.mode || 'auto'
+  const limit = Number(settings.paidQuotaLimit) || 0
+  
+  let isClosed = false
+  if (mode === 'closed') {
+    isClosed = true
+  } else if (mode === 'open') {
+    isClosed = false
+  } else {
+    // mode === 'auto'
+    isClosed = limit > 0 && paidCount >= limit
+  }
+  
+  return {
+    isClosed,
+    paidCount,
+    paidQuotaLimit: limit,
+    closedMessage: settings.closedMessage || 'Pendaftaran sudah ditutup. Nantikan event kami berikutnya.',
+  }
+}
+
 // CSRF Protection Middleware
 function createCsrfMiddleware() {
   function generateCsrfToken(sessionId) {
@@ -334,6 +364,19 @@ export function createApp() {
     res.json(await getSchema())
   })
 
+  app.get('/api/registration-status', async (_req, res) => {
+    try {
+      const schema = await getSchema()
+      const submissions = await getSubmissions()
+      
+      const status = calculateRegistrationStatus(schema, submissions)
+      res.json(status)
+    } catch (error) {
+      console.error('[API] Failed to get registration status:', error)
+      res.status(500).json({ message: 'Failed to get registration status' })
+    }
+  })
+
   app.put('/api/schema', requireAdmin, csrf.validateToken, async (req, res) => {
     if (!ensureStorageInVercel(res)) return
 
@@ -596,6 +639,24 @@ export function createApp() {
 
   app.post('/api/submissions', submissionRateLimit, async (req, res) => {
     if (!ensureStorageInVercel(res)) return
+
+    // Check registration status before accepting submission (fail-closed for business rule enforcement)
+    try {
+      const schema = await getSchema()
+      const submissions = await getSubmissions()
+      const status = calculateRegistrationStatus(schema, submissions)
+      
+      if (status.isClosed) {
+        return res.status(403).json({ 
+          message: status.closedMessage 
+        })
+      }
+    } catch (error) {
+      console.error('[API] Failed to check registration status:', error)
+      return res.status(503).json({
+        message: 'Status pendaftaran sedang tidak dapat diverifikasi. Silakan coba lagi dalam beberapa saat.'
+      })
+    }
 
     // Anti-bot: honeypot check
     if (req.body.website) {
