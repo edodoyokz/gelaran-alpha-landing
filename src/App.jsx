@@ -3,6 +3,7 @@ import { PulseLoader } from 'react-spinners'
 import './index.css'
 import { logError } from './errorTracker.js'
 import { matchesSubmissionQuery, matchesSubmissionFilter, compareSubmissions } from './submissionFilters.js'
+import ScannerCamera from './components/ScannerCamera.jsx'
 
 // Custom hook for debouncing values
 function useDebounce(value, delay) {
@@ -1079,12 +1080,15 @@ function App() {
         })
       }
 
-      // Auto-clear result after 5 seconds
+      // Auto-clear result after 5 seconds (but don't refocus for camera scans)
       scannerAutoClearTimeoutRef.current = setTimeout(() => {
         setScannerResult(null)
         setScannerInput('')
         setManualScannerInput('')
-        scannerInputRef.current?.focus()
+        // Only refocus text input if not using camera
+        if (source !== 'camera') {
+          scannerInputRef.current?.focus()
+        }
       }, 5000)
 
     } catch (error) {
@@ -1102,12 +1106,19 @@ function App() {
         setScannerResult(null)
         setScannerInput('')
         setManualScannerInput('')
-        scannerInputRef.current?.focus()
+        if (source !== 'camera') {
+          scannerInputRef.current?.focus()
+        }
       }, 5000)
     } finally {
       setScannerLoading(false)
     }
   }, [scannerLoading, selectedParticipant])
+
+  // Camera scan handler
+  const handleCameraScan = useCallback((scanValue) => {
+    submitGateScan(scanValue, 'camera')
+  }, [submitGateScan])
 
   const handleScannerInputChange = useCallback((e) => {
     const value = e.target.value
@@ -2283,51 +2294,15 @@ function App() {
                 </div>
                 {message && <p className="form-message mb-2">{message}</p>}
 
-                <div className="scanner-container">
-                  <div className="scanner-input-section">
-                    <label className="field-block">
-                      <span>Scan QR code (auto-detect)</span>
-                      <input
-                        ref={scannerInputRef}
-                        type="text"
-                        value={scannerInput}
-                        onChange={handleScannerInputChange}
-                        placeholder="Arahkan scanner ke QR code..."
-                        autoFocus
-                        autoComplete="off"
-                        disabled={scannerLoading}
-                      />
-                    </label>
-                    <p className="scanner-hint">Scanner akan otomatis memproses QR code yang terdeteksi</p>
-                  </div>
+                <div className="scanner-container camera-first">
+                  {/* Camera Scanner - Primary */}
+                  <ScannerCamera 
+                    onScan={handleCameraScan}
+                    isActive={adminTab === 'scanner'}
+                    dedupeCooldown={2500}
+                  />
 
-                  <div className="scanner-divider">
-                    <span>atau</span>
-                  </div>
-
-                  <div className="scanner-manual-section">
-                    <form onSubmit={handleManualScannerSubmit}>
-                      <label className="field-block">
-                        <span>Input manual</span>
-                        <input
-                          type="text"
-                          value={manualScannerInput}
-                          onChange={(e) => setManualScannerInput(e.target.value)}
-                          placeholder="Ketik kode voucher atau ID peserta..."
-                          autoComplete="off"
-                          disabled={scannerLoading}
-                        />
-                      </label>
-                      <button 
-                        type="submit" 
-                        className="btn-primary"
-                        disabled={scannerLoading || !manualScannerInput.trim()}
-                      >
-                        {scannerLoading ? 'Memproses...' : 'Submit Check-in'}
-                      </button>
-                    </form>
-                  </div>
-
+                  {/* Scanner Result */}
                   {scannerResult && (
                     <div className="scanner-result">
                       <div className={`scanner-status ${scannerResult.status === 'accepted' ? 'success' : 'rejected'}`}>
@@ -2365,6 +2340,54 @@ function App() {
                       </button>
                     </div>
                   )}
+
+                  {/* Fallback Options */}
+                  <div className="scanner-fallback-section">
+                    <h4 className="fallback-title">Opsi Alternatif</h4>
+                    
+                    <div className="scanner-input-section">
+                      <label className="field-block">
+                        <span>Hardware Scanner</span>
+                        <input
+                          ref={scannerInputRef}
+                          type="text"
+                          value={scannerInput}
+                          onChange={handleScannerInputChange}
+                          placeholder="Arahkan hardware scanner ke QR code..."
+                          autoComplete="off"
+                          disabled={scannerLoading}
+                        />
+                      </label>
+                      <p className="scanner-hint">Untuk barcode scanner USB/Bluetooth</p>
+                    </div>
+
+                    <div className="scanner-divider">
+                      <span>atau</span>
+                    </div>
+
+                    <div className="scanner-manual-section">
+                      <form onSubmit={handleManualScannerSubmit}>
+                        <label className="field-block">
+                          <span>Input Manual</span>
+                          <input
+                            type="text"
+                            value={manualScannerInput}
+                            onChange={(e) => setManualScannerInput(e.target.value)}
+                            placeholder="Ketik kode voucher atau ID peserta..."
+                            autoComplete="off"
+                            disabled={scannerLoading}
+                          />
+                        </label>
+                        <button 
+                          type="submit" 
+                          className="btn-primary"
+                          disabled={scannerLoading || !manualScannerInput.trim()}
+                        >
+                          {scannerLoading ? 'Memproses...' : 'Submit Check-in'}
+                        </button>
+                      </form>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
