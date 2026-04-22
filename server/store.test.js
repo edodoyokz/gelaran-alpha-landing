@@ -473,3 +473,25 @@ test('findSubmissionByScanValue - returns null when no match in structured paylo
   
   assert.strictEqual(found, null, 'Should return null when no submission matches')
 })
+
+
+test('updateSubmissionCheckInStatus - returns checked-in submission after persisted update', async () => {
+  const { addSubmission, updateSubmissionCheckInStatus, deleteSubmission } = await import('./store.js')
+
+  const testSubmission = {
+    id: 'test-check-in-' + Date.now(),
+    answers: [{ label: 'Name', value: 'Check In Test User' }],
+  }
+
+  try {
+    await addSubmission(testSubmission)
+
+    const updated = await updateSubmissionCheckInStatus(testSubmission.id)
+
+    assert.ok(updated, 'Should return the updated submission')
+    assert.strictEqual(updated.checkInStatus, 'checked_in')
+    assert.ok(updated.checkedInAt, 'Should set checkedInAt timestamp')
+  } finally {
+    await deleteSubmission(testSubmission.id)
+  }
+})

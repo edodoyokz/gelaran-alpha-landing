@@ -439,22 +439,50 @@ export async function updateSupabaseSubmissionCheckInStatus(id) {
     const client = getClient()
     if (!client) return null
 
+    const { data: currentRow, error: currentError } = await client
+      .from('submissions')
+      .select('id, check_in_status, checked_in_at')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (currentError) throw currentError
+    if (!currentRow) return null
+
+    if (currentRow.check_in_status === 'checked_in') {
+      const { data: existingRow, error: existingError } = await client
+        .from('submissions')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle()
+
+      if (existingError) throw existingError
+
+      return rowToSubmission(existingRow || currentRow)
+    }
+
     const updateData = {
       check_in_status: 'checked_in',
       checked_in_at: new Date().toISOString(),
     }
 
-    const { data, error } = await client
+    const { error: updateError } = await client
       .from('submissions')
       .update(updateData)
       .eq('id', id)
-      .select()
-      .single()
+      .neq('check_in_status', 'checked_in')
 
-    if (error) throw error
-    if (!data) return null
+    if (updateError) throw updateError
 
-    return rowToSubmission(data)
+    const { data: refreshedRow, error: refreshedError } = await client
+      .from('submissions')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (refreshedError) throw refreshedError
+    if (!refreshedRow) return null
+
+    return rowToSubmission(refreshedRow)
   } catch (err) {
     console.error('[supabaseStorage] updateSupabaseSubmissionCheckInStatus error:', err)
     return null
