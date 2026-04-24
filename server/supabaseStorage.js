@@ -26,8 +26,34 @@ function getClient() {
 // Helpers — map between camelCase JS objects and snake_case DB columns
 // ---------------------------------------------------------------------------
 
+/**
+ * Store registration settings inside email_config as a backward-compatible
+ * metadata payload because the live Supabase table does not currently expose
+ * a dedicated registration_settings column.
+ */
+function extractRegistrationSettings(row) {
+  return row.email_config?.registrationSettings ?? undefined
+}
+
+function buildEmailConfigForStorage(schema) {
+  const emailConfig = schema.emailConfig ?? null
+
+  if (!emailConfig && !schema.registrationSettings) {
+    return null
+  }
+
+  return {
+    ...(emailConfig ?? {}),
+    ...(schema.registrationSettings
+      ? { registrationSettings: schema.registrationSettings }
+      : {}),
+  }
+}
+
 /** Convert a DB row from `event_schema` into the JS schema shape. */
 function rowToSchema(row) {
+  const { registrationSettings, ...emailConfig } = row.email_config ?? {}
+
   return {
     eventName: row.event_name,
     tagline: row.tagline,
@@ -38,7 +64,8 @@ function rowToSchema(row) {
     fields: row.fields,
     highlights: row.highlights ?? [],
     features: row.features ?? [],
-    emailConfig: row.email_config ?? null,
+    emailConfig: Object.keys(emailConfig).length > 0 ? emailConfig : null,
+    registrationSettings: extractRegistrationSettings(row),
   }
 }
 
@@ -55,7 +82,7 @@ function schemaToRow(schema) {
     fields: schema.fields ?? [],
     highlights: schema.highlights ?? [],
     features: schema.features ?? [],
-    email_config: schema.emailConfig ?? null,
+    email_config: buildEmailConfigForStorage(schema),
     updated_at: new Date().toISOString(),
   }
 }
