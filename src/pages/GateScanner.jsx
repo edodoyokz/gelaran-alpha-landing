@@ -14,8 +14,11 @@ function getResultMeta(result) {
       tone: 'idle',
       icon: '•',
       label: 'Menunggu Scan',
+      scannerLabel: 'SIAP SCAN',
       accentClass: 'border-slate-700/70 bg-slate-950/80 text-slate-200',
       glowClass: 'from-emerald-400/10 via-transparent to-transparent',
+      cameraStateClass: 'is-idle',
+      pageStateClass: 'has-idle',
     }
   }
 
@@ -24,8 +27,11 @@ function getResultMeta(result) {
       tone: 'accepted',
       icon: '✓',
       label: 'Check-in Berhasil',
+      scannerLabel: 'VALID',
       accentClass: 'border-emerald-400/50 bg-emerald-500/15 text-emerald-50',
       glowClass: 'from-emerald-400/35 via-emerald-400/5 to-transparent',
+      cameraStateClass: 'is-success',
+      pageStateClass: 'has-success',
     }
   }
 
@@ -34,8 +40,11 @@ function getResultMeta(result) {
       tone: 'already',
       icon: '!',
       label: 'Sudah Check-in',
+      scannerLabel: 'SUDAH MASUK',
       accentClass: 'border-amber-300/60 bg-amber-400/15 text-amber-50',
       glowClass: 'from-amber-300/35 via-amber-300/5 to-transparent',
+      cameraStateClass: 'is-warning',
+      pageStateClass: 'has-warning',
     }
   }
 
@@ -43,9 +52,24 @@ function getResultMeta(result) {
     tone: 'rejected',
     icon: '✗',
     label: result.status === 'error' ? 'Error' : 'Check-in Ditolak',
+    scannerLabel: 'DITOLAK',
     accentClass: 'border-rose-400/60 bg-rose-500/15 text-rose-50',
     glowClass: 'from-rose-400/35 via-rose-400/5 to-transparent',
+    cameraStateClass: 'is-danger',
+    pageStateClass: 'has-danger',
   }
+}
+
+function getParticipantDisplayName(result) {
+  const answers = result?.submission?.answers
+  if (!Array.isArray(answers)) return ''
+
+  const nameAnswer = answers.find((answer) => {
+    const label = String(answer?.label || '').toLowerCase()
+    return label.includes('nama') || label.includes('name')
+  })
+
+  return String(nameAnswer?.value || answers[0]?.value || '').trim()
 }
 
 function vibrateForResult(result) {
@@ -385,7 +409,7 @@ export default function GateScanner() {
   }
 
   return (
-    <main className="gate-scanner-page min-h-dvh overflow-hidden bg-[#030505] text-white">
+    <main className={`gate-scanner-page ${resultMeta.pageStateClass} min-h-dvh overflow-hidden bg-[#030505] text-white`}>
       <input
         ref={scannerInputRef}
         className="gate-hardware-input"
@@ -415,15 +439,30 @@ export default function GateScanner() {
         </header>
 
         <section className="mx-auto grid w-full max-w-7xl flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_390px] lg:p-6">
-          <div className="gate-camera-shell relative min-h-[70dvh] overflow-hidden rounded-[2rem] border border-white/10 bg-black shadow-[0_25px_90px_rgba(0,0,0,0.45)] lg:min-h-0">
+          <div className={`gate-camera-shell ${resultMeta.cameraStateClass} relative min-h-[70dvh] overflow-hidden rounded-[2rem] border border-white/10 bg-black shadow-[0_25px_90px_rgba(0,0,0,0.45)] lg:min-h-0`}>
             <ScannerCamera onScan={handleCameraScan} isActive={true} dedupeCooldown={2500} />
+            <div className="gate-scan-tint" aria-hidden="true" />
             {scannerLoading ? (
-              <div className="absolute left-4 top-4 rounded-full border border-white/10 bg-black/70 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-emerald-200 backdrop-blur">
+              <div className="absolute left-4 top-4 z-20 rounded-full border border-white/10 bg-black/70 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-emerald-200 backdrop-blur">
                 Memproses
               </div>
             ) : null}
             {scannerResult ? (
-              <div className={`absolute inset-x-3 bottom-3 rounded-[1.5rem] border p-4 shadow-2xl backdrop-blur-xl lg:hidden ${resultMeta.accentClass}`}>
+              <div className="gate-result-flash pointer-events-none absolute inset-0 z-20 grid place-items-center px-5 text-center" aria-live="assertive">
+                <div className="gate-result-flash-card max-w-[min(34rem,calc(100vw-2.5rem))] rounded-[2rem] border px-6 py-7 shadow-2xl backdrop-blur-xl sm:px-8 sm:py-8">
+                  <div className="mx-auto mb-4 grid size-24 place-items-center rounded-full bg-white/18 text-6xl font-black leading-none sm:size-28 sm:text-7xl">
+                    {resultMeta.icon}
+                  </div>
+                  <p className="text-sm font-black uppercase tracking-[0.32em] opacity-80">{resultMeta.scannerLabel}</p>
+                  <h2 className="mt-2 text-3xl font-black leading-tight sm:text-5xl">{resultMeta.label}</h2>
+                  {getParticipantDisplayName(scannerResult) ? (
+                    <p className="mt-3 truncate text-lg font-bold opacity-90 sm:text-2xl">{getParticipantDisplayName(scannerResult)}</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            {scannerResult ? (
+              <div className={`absolute inset-x-3 bottom-3 z-30 rounded-[1.5rem] border p-4 shadow-2xl backdrop-blur-xl lg:hidden ${resultMeta.accentClass}`}>
                 <div className="flex items-center gap-3">
                   <span className="grid size-12 shrink-0 place-items-center rounded-full bg-white/15 text-2xl font-black">{resultMeta.icon}</span>
                   <div className="min-w-0">

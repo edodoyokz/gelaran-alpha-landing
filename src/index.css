@@ -2084,6 +2084,28 @@ select:focus {
     radial-gradient(circle at 22% 18%, rgba(16, 185, 129, 0.24), transparent 32%),
     radial-gradient(circle at 84% 76%, rgba(244, 63, 94, 0.16), transparent 28%),
     linear-gradient(135deg, rgba(3, 7, 18, 0.94), rgba(4, 12, 10, 0.9));
+  transition: background 220ms ease, opacity 220ms ease;
+}
+
+.gate-scanner-page.has-success .bg-radial-gradient {
+  background:
+    radial-gradient(circle at 50% 42%, rgba(16, 185, 129, 0.34), transparent 36%),
+    radial-gradient(circle at 18% 12%, rgba(52, 211, 153, 0.26), transparent 32%),
+    linear-gradient(135deg, rgba(2, 44, 34, 0.95), rgba(3, 7, 18, 0.92));
+}
+
+.gate-scanner-page.has-warning .bg-radial-gradient {
+  background:
+    radial-gradient(circle at 50% 42%, rgba(245, 158, 11, 0.34), transparent 36%),
+    radial-gradient(circle at 18% 12%, rgba(251, 191, 36, 0.22), transparent 32%),
+    linear-gradient(135deg, rgba(69, 39, 8, 0.92), rgba(3, 7, 18, 0.92));
+}
+
+.gate-scanner-page.has-danger .bg-radial-gradient {
+  background:
+    radial-gradient(circle at 50% 42%, rgba(244, 63, 94, 0.34), transparent 36%),
+    radial-gradient(circle at 18% 12%, rgba(251, 113, 133, 0.22), transparent 32%),
+    linear-gradient(135deg, rgba(76, 5, 25, 0.94), rgba(3, 7, 18, 0.92));
 }
 
 .gate-hardware-input {
@@ -2119,6 +2141,60 @@ select:focus {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.gate-camera-shell {
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.gate-camera-shell.is-success {
+  border-color: rgba(52, 211, 153, 0.7);
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.22), 0 30px 110px rgba(16, 185, 129, 0.36);
+}
+
+.gate-camera-shell.is-warning {
+  border-color: rgba(251, 191, 36, 0.78);
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.24), 0 30px 110px rgba(245, 158, 11, 0.34);
+}
+
+.gate-camera-shell.is-danger {
+  border-color: rgba(251, 113, 133, 0.78);
+  box-shadow: 0 0 0 1px rgba(251, 113, 133, 0.24), 0 30px 110px rgba(244, 63, 94, 0.36);
+}
+
+.gate-scan-tint {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  opacity: 0;
+  background: transparent;
+  mix-blend-mode: screen;
+  transition: opacity 150ms ease, background 150ms ease;
+}
+
+.gate-camera-shell.is-success .gate-scan-tint {
+  opacity: 1;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(16, 185, 129, 0.42), transparent 34%),
+    linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.1));
+  animation: gate-result-wash 900ms ease-out both;
+}
+
+.gate-camera-shell.is-warning .gate-scan-tint {
+  opacity: 1;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(245, 158, 11, 0.42), transparent 34%),
+    linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.1));
+  animation: gate-result-wash 900ms ease-out both;
+}
+
+.gate-camera-shell.is-danger .gate-scan-tint {
+  opacity: 1;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(244, 63, 94, 0.46), transparent 34%),
+    linear-gradient(135deg, rgba(244, 63, 94, 0.24), rgba(190, 18, 60, 0.12));
+  animation: gate-result-wash 900ms ease-out both;
 }
 
 .gate-camera-shell .camera-controls {
@@ -2163,11 +2239,140 @@ select:focus {
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.42), 0 0 42px rgba(16, 185, 129, 0.45);
 }
 
+.gate-camera-shell.is-success .scan-frame {
+  border-color: #34d399;
+  box-shadow: 0 0 0 9999px rgba(6, 95, 70, 0.28), 0 0 70px rgba(16, 185, 129, 0.85), inset 0 0 28px rgba(16, 185, 129, 0.32);
+  animation: gate-frame-success 820ms ease-out both;
+}
+
+.gate-camera-shell.is-warning .scan-frame {
+  border-color: #fbbf24;
+  box-shadow: 0 0 0 9999px rgba(120, 53, 15, 0.3), 0 0 70px rgba(245, 158, 11, 0.82), inset 0 0 28px rgba(245, 158, 11, 0.3);
+  animation: gate-frame-warning 820ms ease-out both;
+}
+
+.gate-camera-shell.is-danger .scan-frame {
+  border-color: #fb7185;
+  box-shadow: 0 0 0 9999px rgba(136, 19, 55, 0.32), 0 0 74px rgba(244, 63, 94, 0.9), inset 0 0 30px rgba(244, 63, 94, 0.36);
+  animation: gate-frame-danger 820ms ease-out both;
+}
+
 .gate-camera-shell .scan-instruction {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.58);
   backdrop-filter: blur(12px);
+}
+
+.gate-camera-shell.is-success .scan-instruction {
+  border-color: rgba(52, 211, 153, 0.5);
+  background: rgba(6, 78, 59, 0.68);
+  color: #d1fae5;
+}
+
+.gate-camera-shell.is-warning .scan-instruction {
+  border-color: rgba(251, 191, 36, 0.55);
+  background: rgba(92, 53, 8, 0.72);
+  color: #fef3c7;
+}
+
+.gate-camera-shell.is-danger .scan-instruction {
+  border-color: rgba(251, 113, 133, 0.55);
+  background: rgba(127, 29, 29, 0.72);
+  color: #ffe4e6;
+}
+
+.gate-result-flash {
+  color: #fff;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+  animation: gate-result-pop 260ms cubic-bezier(0.2, 0.9, 0.2, 1.2) both;
+}
+
+.gate-result-flash-card {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(2, 6, 23, 0.55);
+}
+
+.gate-camera-shell.is-success .gate-result-flash-card {
+  border-color: rgba(110, 231, 183, 0.65);
+  background: linear-gradient(135deg, rgba(6, 95, 70, 0.86), rgba(5, 150, 105, 0.62));
+  box-shadow: 0 28px 90px rgba(16, 185, 129, 0.34);
+}
+
+.gate-camera-shell.is-warning .gate-result-flash-card {
+  border-color: rgba(252, 211, 77, 0.7);
+  background: linear-gradient(135deg, rgba(120, 53, 15, 0.86), rgba(217, 119, 6, 0.62));
+  box-shadow: 0 28px 90px rgba(245, 158, 11, 0.32);
+}
+
+.gate-camera-shell.is-danger .gate-result-flash-card {
+  border-color: rgba(253, 164, 175, 0.7);
+  background: linear-gradient(135deg, rgba(136, 19, 55, 0.88), rgba(225, 29, 72, 0.66));
+  box-shadow: 0 28px 90px rgba(244, 63, 94, 0.34);
+}
+
+@keyframes gate-result-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes gate-result-wash {
+  0% {
+    opacity: 0;
+  }
+
+  28% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.82;
+  }
+}
+
+@keyframes gate-frame-success {
+  0%, 100% {
+    transform: scale(1);
+  }
+
+  35% {
+    transform: scale(1.07);
+  }
+}
+
+@keyframes gate-frame-warning {
+  0%, 100% {
+    transform: scale(1);
+  }
+
+  35% {
+    transform: scale(1.04) rotate(-1deg);
+  }
+}
+
+@keyframes gate-frame-danger {
+  0%, 100% {
+    transform: translateX(0);
+  }
+
+  18% {
+    transform: translateX(-8px);
+  }
+
+  36% {
+    transform: translateX(8px);
+  }
+
+  54% {
+    transform: translateX(-4px);
+  }
 }
 
 @media (min-width: 1024px) {
